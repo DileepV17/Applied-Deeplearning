@@ -192,3 +192,9 @@ Training Begins...
 [EPOCH 0]:Train Step [1820/1890] Train Loss: 5.4001 Train Acc: 0.6547
 [EPOCH 0]:Train Step [1830/1890] Train Loss: 5.3769 Train Acc: 0.6555
 [EPOCH 0]:Train Step [1840/1890] Train Loss: 5.4109 Train Acc: 0.6563
+[EPOCH 0]:Train Step [1850/1890] Train Loss: 5.4072 Train Acc: 0.6569
+[EPOCH 0]:Train Step [1860/1890] Train Loss: 5.3945 Train Acc: 0.6575
+[EPOCH 0]:Train Step [1870/1890] Train Loss: 5.4159 Train Acc: 0.6583
+[EPOCH 0]:Train Step [1880/1890] Train Loss: 5.4038 Train Acc: 0.6589
+[EPOCH 0]:Train Step [1890/1890] Train Loss: 5.4723 Train Acc: 0.6594
+Evaluating:  17%|█▋        | 139/814 [01:15<05:48,  1.93it/s]
