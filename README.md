@@ -1,5 +1,6 @@
-# hitt
 # Applied-Deeplearning
+
+### Project members: Dileep Vemuri (12818965), Duc Anh Nguyen (12433139), Anjali Sarawgi (12690415)
 
 ## Step 1: Dataset
 We chose the DomainNet Dataset where our source dataset type is the `real' images set, and we primarily focus on the infograph set of images as our target dataset for this project. As the required extension, we have decided to test this for other two datasets as well which include clipart, sketch. 
