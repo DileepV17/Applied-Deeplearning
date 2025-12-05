@@ -1,0 +1,1 @@
+{"_runtime":598,"train/loss_step":5.0850629806518555,"test/real_acc":0.99,"test/infograph_acc":0.406,"_wandb":{"runtime":598},"_timestamp":1.764949569080916e+09,"epoch":10,"train/acc_epoch":0.9998,"train/loss_epoch":0.08037871189117432,"_step":79,"train/acc_step":0.9997767857142857,"train/step":70}

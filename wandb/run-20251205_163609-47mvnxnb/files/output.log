@@ -1,0 +1,140 @@
+STEP 1: Loading CLIP...
+/dss/dsshome1/09/ra47fey3/miniforge3/envs/py39/lib/python3.9/site-packages/open_clip/factory.py:450: UserWarning: QuickGELU mismatch between final model config (quick_gelu=False) and pretrained tag 'openai' (quick_gelu=True).
+  warnings.warn(
+STEP 1 COMPLETE
+STEP 2: Loading the dataset...
+STEP 2 COMPLETE
+STEP 3: Creating the data loaders...
+STEP 3 COMPLETE
+Training Begins...
+79it [00:49,  1.59it/s]
+[EPOCH]:0Train Step [10/79] Train Loss: 5.7207 Train Acc: 0.2562
+[EPOCH]:0Train Step [20/79] Train Loss: 5.6116 Train Acc: 0.4156
+[EPOCH]:0Train Step [30/79] Train Loss: 5.5514 Train Acc: 0.5359
+[EPOCH]:0Train Step [40/79] Train Loss: 5.4689 Train Acc: 0.6102
+[EPOCH]:0Train Step [50/79] Train Loss: 5.4228 Train Acc: 0.6644
+[EPOCH]:0Train Step [60/79] Train Loss: 5.4070 Train Acc: 0.7005
+[EPOCH]:0Train Step [70/79] Train Loss: 5.4001 Train Acc: 0.7290
+79it [00:47,  1.65it/s]                                  
+Epoch 1/10
+  Train Loss: 0.0873
+  Train Acc:  0.7486
+  Source Test Acc (Real): 0.9900
+  Target Test Acc (Infograph): 0.4760
+[EPOCH]:1Train Step [10/79] Train Loss: 5.3320 Train Acc: 0.9484
+[EPOCH]:1Train Step [20/79] Train Loss: 5.3031 Train Acc: 0.9523
+[EPOCH]:1Train Step [30/79] Train Loss: 5.3045 Train Acc: 0.9526
+[EPOCH]:1Train Step [40/79] Train Loss: 5.2975 Train Acc: 0.9566
+[EPOCH]:1Train Step [50/79] Train Loss: 5.2957 Train Acc: 0.9603
+[EPOCH]:1Train Step [60/79] Train Loss: 5.2897 Train Acc: 0.9630
+[EPOCH]:1Train Step [70/79] Train Loss: 5.2651 Train Acc: 0.9645
+79it [00:47,  1.65it/s]                                  
+Epoch 2/10
+  Train Loss: 0.0838
+  Train Acc:  0.9660
+  Source Test Acc (Real): 0.9860
+  Target Test Acc (Infograph): 0.4800
+[EPOCH]:2Train Step [10/79] Train Loss: 5.2624 Train Acc: 0.9891
+[EPOCH]:2Train Step [20/79] Train Loss: 5.2564 Train Acc: 0.9867
+[EPOCH]:2Train Step [30/79] Train Loss: 5.2604 Train Acc: 0.9859
+[EPOCH]:2Train Step [40/79] Train Loss: 5.2346 Train Acc: 0.9867
+[EPOCH]:2Train Step [50/79] Train Loss: 5.2369 Train Acc: 0.9866
+[EPOCH]:2Train Step [60/79] Train Loss: 5.2445 Train Acc: 0.9862
+[EPOCH]:2Train Step [70/79] Train Loss: 5.2343 Train Acc: 0.9868
+79it [00:47,  1.65it/s]                                  
+Epoch 3/10
+  Train Loss: 0.0830
+  Train Acc:  0.9870
+  Source Test Acc (Real): 0.9800
+  Target Test Acc (Infograph): 0.4380
+[EPOCH]:3Train Step [10/79] Train Loss: 5.2230 Train Acc: 0.9953
+[EPOCH]:3Train Step [20/79] Train Loss: 5.2234 Train Acc: 0.9953
+[EPOCH]:3Train Step [30/79] Train Loss: 5.2231 Train Acc: 0.9932
+[EPOCH]:3Train Step [40/79] Train Loss: 5.2191 Train Acc: 0.9945
+[EPOCH]:3Train Step [50/79] Train Loss: 5.2120 Train Acc: 0.9947
+[EPOCH]:3Train Step [60/79] Train Loss: 5.2124 Train Acc: 0.9948
+[EPOCH]:3Train Step [70/79] Train Loss: 5.2133 Train Acc: 0.9951
+79it [00:47,  1.65it/s]                                  
+Epoch 4/10
+  Train Loss: 0.0825
+  Train Acc:  0.9950
+  Source Test Acc (Real): 0.9960
+  Target Test Acc (Infograph): 0.4700
+[EPOCH]:4Train Step [10/79] Train Loss: 5.2029 Train Acc: 1.0000
+[EPOCH]:4Train Step [20/79] Train Loss: 5.2125 Train Acc: 1.0000
+[EPOCH]:4Train Step [30/79] Train Loss: 5.1945 Train Acc: 0.9995
+[EPOCH]:4Train Step [40/79] Train Loss: 5.2000 Train Acc: 0.9992
+[EPOCH]:4Train Step [50/79] Train Loss: 5.1924 Train Acc: 0.9994
+[EPOCH]:4Train Step [60/79] Train Loss: 5.1944 Train Acc: 0.9990
+[EPOCH]:4Train Step [70/79] Train Loss: 5.1840 Train Acc: 0.9989
+79it [00:48,  1.64it/s]                                  
+Epoch 5/10
+  Train Loss: 0.0821
+  Train Acc:  0.9990
+  Source Test Acc (Real): 0.9940
+  Target Test Acc (Infograph): 0.4340
+[EPOCH]:5Train Step [10/79] Train Loss: 5.1853 Train Acc: 1.0000
+[EPOCH]:5Train Step [20/79] Train Loss: 5.1810 Train Acc: 0.9992
+[EPOCH]:5Train Step [30/79] Train Loss: 5.1789 Train Acc: 0.9990
+[EPOCH]:5Train Step [40/79] Train Loss: 5.1769 Train Acc: 0.9992
+[EPOCH]:5Train Step [50/79] Train Loss: 5.1717 Train Acc: 0.9994
+[EPOCH]:5Train Step [60/79] Train Loss: 5.1694 Train Acc: 0.9990
+[EPOCH]:5Train Step [70/79] Train Loss: 5.1601 Train Acc: 0.9991
+79it [00:47,  1.65it/s]                                  
+Epoch 6/10
+  Train Loss: 0.0817
+  Train Acc:  0.9992
+  Source Test Acc (Real): 0.9920
+  Target Test Acc (Infograph): 0.4440
+[EPOCH]:6Train Step [10/79] Train Loss: 5.1592 Train Acc: 1.0000
+[EPOCH]:6Train Step [20/79] Train Loss: 5.1484 Train Acc: 1.0000
+[EPOCH]:6Train Step [30/79] Train Loss: 5.1480 Train Acc: 0.9995
+[EPOCH]:6Train Step [40/79] Train Loss: 5.1507 Train Acc: 0.9996
+[EPOCH]:6Train Step [50/79] Train Loss: 5.1532 Train Acc: 0.9997
+[EPOCH]:6Train Step [60/79] Train Loss: 5.1451 Train Acc: 0.9992
+[EPOCH]:6Train Step [70/79] Train Loss: 5.1378 Train Acc: 0.9989
+79it [00:47,  1.66it/s]                                  
+Epoch 7/10
+  Train Loss: 0.0814
+  Train Acc:  0.9990
+  Source Test Acc (Real): 0.9780
+  Target Test Acc (Infograph): 0.3980
+[EPOCH]:7Train Step [10/79] Train Loss: 5.1395 Train Acc: 1.0000
+[EPOCH]:7Train Step [20/79] Train Loss: 5.1369 Train Acc: 0.9992
+[EPOCH]:7Train Step [30/79] Train Loss: 5.1343 Train Acc: 0.9995
+[EPOCH]:7Train Step [40/79] Train Loss: 5.1355 Train Acc: 0.9996
+[EPOCH]:7Train Step [50/79] Train Loss: 5.1291 Train Acc: 0.9997
+[EPOCH]:7Train Step [60/79] Train Loss: 5.1296 Train Acc: 0.9997
+[EPOCH]:7Train Step [70/79] Train Loss: 5.1268 Train Acc: 0.9998
+79it [00:47,  1.67it/s]                                  
+Epoch 8/10
+  Train Loss: 0.0811
+  Train Acc:  0.9996
+  Source Test Acc (Real): 0.9860
+  Target Test Acc (Infograph): 0.4100
+[EPOCH]:8Train Step [10/79] Train Loss: 5.1291 Train Acc: 1.0000
+[EPOCH]:8Train Step [20/79] Train Loss: 5.1209 Train Acc: 1.0000
+[EPOCH]:8Train Step [30/79] Train Loss: 5.1098 Train Acc: 1.0000
+[EPOCH]:8Train Step [40/79] Train Loss: 5.1020 Train Acc: 1.0000
+[EPOCH]:8Train Step [50/79] Train Loss: 5.1016 Train Acc: 1.0000
+[EPOCH]:8Train Step [60/79] Train Loss: 5.0940 Train Acc: 1.0000
+[EPOCH]:8Train Step [70/79] Train Loss: 5.1052 Train Acc: 0.9998
+79it [00:47,  1.66it/s]                                  
+Epoch 9/10
+  Train Loss: 0.0807
+  Train Acc:  0.9998
+  Source Test Acc (Real): 0.9900
+  Target Test Acc (Infograph): 0.3680
+[EPOCH]:9Train Step [10/79] Train Loss: 5.0961 Train Acc: 0.9984
+[EPOCH]:9Train Step [20/79] Train Loss: 5.0982 Train Acc: 0.9992
+[EPOCH]:9Train Step [30/79] Train Loss: 5.0835 Train Acc: 0.9995
+[EPOCH]:9Train Step [40/79] Train Loss: 5.0921 Train Acc: 0.9996
+[EPOCH]:9Train Step [50/79] Train Loss: 5.0759 Train Acc: 0.9997
+[EPOCH]:9Train Step [60/79] Train Loss: 5.0908 Train Acc: 0.9997
+[EPOCH]:9Train Step [70/79] Train Loss: 5.0851 Train Acc: 0.9998
+                                                         
+Epoch 10/10
+  Train Loss: 0.0804
+  Train Acc:  0.9998
+  Source Test Acc (Real): 0.9900
+  Target Test Acc (Infograph): 0.4060
