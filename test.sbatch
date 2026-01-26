@@ -3,7 +3,7 @@
 #SBATCH --qos=mcml
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH -t 2:00:00
+#SBATCH -t 7:00:00
 
 source /dss/dsshome1/09/ra47fey3/miniforge3/etc/profile.d/conda.sh
 conda activate py39
