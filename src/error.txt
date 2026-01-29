@@ -1,0 +1,10 @@
+images with model.encode on line 121 trying to encode before the variables was defined.
+
+Zero-shot on source(Real images): 0.7863078704363846
+Zero-shot on target(Infograph images): 0.40459765793876057
+
+# 3 FC layers finetuning
+normalization added
+lr= 0.001 (lr scheduler cosine)
+weightdecay = 1e-5
+added momentum default values

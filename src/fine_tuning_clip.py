@@ -10,11 +10,13 @@ from PIL import Image
 import wandb
 from torch.utils.data import Subset
 from sklearn.metrics import f1_score, precision_score, recall_score
+import numpy as np
 
 # wandb initialize
+model_name = "15epochs_infograph_clipart_5layers512_0.01lr_run"
 wandb.init(
     project="applied-dl-domain-adaptation",
-    name="10epochs_infograph_clipart_0.001lr_run",
+    name=model_name,
 )
 
 device = "cuda" if torch.cuda.is_available() else "cpu" # setting up for gpu
@@ -95,10 +97,10 @@ print("STEP 2 COMPLETE")
 
 
 print("STEP 3: Creating the data loaders...")
-train_loader = DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=4)
-real_test_loader = DataLoader(real_test_dataset, batch_size=512, shuffle=False, num_workers=4)
-infograph_test_loader = DataLoader(infograph_test_dataset, batch_size=512, shuffle=False, num_workers=4)
-clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=512, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True, num_workers=4)
+real_test_loader = DataLoader(real_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
+infograph_test_loader = DataLoader(infograph_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
+clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
 print("STEP 3 COMPLETE")
 
 # num_classes = len(train_dataset.classes) # to check
@@ -106,10 +108,50 @@ print("STEP 3 COMPLETE")
 
 
 image_features_dim = model.visual.output_dim
-classifier = nn.Linear(image_features_dim, num_classes).to(device) # linear layer
+## zero layer ##
+# classifier = nn.Linear(image_features_dim, num_classes).to(device) # linear layer
 
-def train_one_epoch():
-    model.train()
+
+## three layer ##
+# - 512
+classifier  = nn.Sequential(
+    nn.Linear(image_features_dim, 512),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1), #droupout changed to 0.1       
+    nn.Linear(512, 512),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),  
+    nn.Linear(512, 512),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),  
+    nn.Linear(512, 512),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),        
+    nn.Linear(512, num_classes)
+).to(device)
+
+# # - 1024
+# classifier  = nn.Sequential(
+#     nn.Linear(image_features_dim, 1024),
+#     nn.ReLU(inplace=True),
+#     nn.Dropout(0.1), #droupout changed to 0.1       
+#     nn.Linear(1024, 1024),
+#     nn.ReLU(inplace=True),
+#     nn.Dropout(0.1),        
+#     nn.Linear(1024, num_classes)
+# ).to(device)
+
+
+
+##  then we choose 512 vs 1024 vs if any - then experiment with number of layers (1, 3, 5)
+
+# Freeze CLIP visual encoder - only train the classifier
+for param in model.visual.parameters():
+    param.requires_grad = False
+
+
+def train_one_epoch(criterion, optimizer ):
+    model.eval()  # Set model to eval mode to disable dropout and batch norm updates
     classifier.train()
 
     total_loss = 0
@@ -119,50 +161,54 @@ def train_one_epoch():
     for batch_idx, (images, labels) in tqdm(enumerate(train_loader)):
         images, labels = images.to(device), labels.to(device)
 
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam( list(model.visual.parameters()) + list(classifier.parameters()), lr=1e-3, weight_decay=0.001 )
         optimizer.zero_grad() 
-
-        image_features = model.encode_image(images) # we only use the clip image encoder and ignore the text encoder since we have only images and no text pairs
+        with torch.no_grad():
+            image_features = model.encode_image(images) # we only use the clip image encoder and ignore the text encoder since we have only images and no text pairs
 
         # Normalize features
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True) # to check
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True) # added normalization
 
         logits = classifier(image_features)
-        loss = criterion(logits, labels)
+        loss = criterion(logits, labels) # loss per batch 
+
+        # finding batch_size 
+        bs = labels.size(0) # to avoid the last batch size being smaller inconsistency
         
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
+        total_loss += loss.item() * bs # prev: for one batch + one batch / total batch len(trai_loader) --- new: for each sample in the batch (512)+ each sample in the batch  (512)+ 200  == all samples loss / (all samples)
         _, preds = logits.max(1)
         correct += preds.eq(labels).sum().item()
-        total += labels.size(0)
+        total += bs # number of all samples (eg 512+512+... + 200)
 
         # LOG EVERY 10 STEPS - you can change this 10 to any number you like
         if (batch_idx + 1) % 10 == 0:
             wandb.log({
                 "train/train_loss": loss.item(),
                 "train/train_acc_step": correct / total,
+                "train/running_loss": total_loss / total,
                 "train/step": batch_idx + 1
             })
             print(
                 f"[EPOCH {epoch}]:"
                 f"Train Step [{batch_idx+1}/{len(train_loader)}] "
-                f"Train Loss: {loss.item():.4f} "
+                f"Batch Loss: {loss.item():.4f} "
                 f"Train Acc: {correct/total:.4f}"
             )
-    return total_loss / len(train_dataset), correct / total
+    return total_loss / total, correct / total
 
 
 
 
 def evaluate(loader):
-    model.eval()
+    model.eval()  # CLIP model stays in eval mode
     classifier.eval()
 
     correct = 0
     total = 0
+    all_labels = []
+    all_preds = []
 
     with torch.no_grad():
         for images, labels in tqdm(loader, desc="Evaluating", leave=False):
@@ -174,20 +220,35 @@ def evaluate(loader):
             _, preds = logits.max(1) 
             correct += preds.eq(labels).sum().item()
             total += labels.size(0)
-            acc  = correct / total
 
-            # f1 score
-            f1 = f1_score(labels, preds, zero_division=0)
-            precision = precision_score(labels, preds, zero_division=0)
-            recall = recall_score(labels, preds, zero_division=0)
+            # Accumulate predictions and labels for metric computation
+            all_labels.append(labels.cpu().numpy())
+            all_preds.append(preds.cpu().numpy())
 
-    return acc , f1, precision, recall
+        # Compute metrics over entire dataset
+        all_labels = np.concatenate(all_labels)
+        all_preds = np.concatenate(all_preds)
+        acc = correct / total
+        f1 = f1_score(all_labels, all_preds, zero_division=0, average='weighted')
+        precision = precision_score(all_labels, all_preds, zero_division=0, average='weighted')
+        recall = recall_score(all_labels, all_preds, zero_division=0, average='weighted')
+
+    return acc, f1, precision, recall
 
 
 print("Training Begins...")
-EPOCHS = 10
+EPOCHS = 15
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(classifier.parameters(), lr=0.01, weight_decay=1e-5 )
+
+scheduler = optim.lr_scheduler.StepLR(
+    optimizer,
+    step_size=5,
+    gamma=0.1
+)
+
 for epoch in range(EPOCHS):
-    train_loss, train_acc = train_one_epoch() # train acc = real train acc
+    train_loss, train_acc = train_one_epoch(criterion=criterion, optimizer=optimizer) # train acc = real train acc
 
     print(f"Epoch {epoch+1}/{EPOCHS}")
     print(f"  Train Loss: {train_loss:.4f}")
@@ -200,7 +261,7 @@ for epoch in range(EPOCHS):
     print(f"  Source Test Precision (Real): {real_test_precision:.4f}")
     print(f"  Source Test Recall (Real): {real_test_recall:.4f}")
 
-     # infograph test acc 
+    # infograph test acc 
     infograph_test_acc, infograph_test_f1, infograph_test_precision, infograph_test_recall= evaluate(infograph_test_loader)
     print(f"  Target Test Acc (Infograph): {infograph_test_acc:.4f}")
     print(f"  Target Test F1 (Infograph): {infograph_test_f1:.4f}")
@@ -236,7 +297,20 @@ for epoch in range(EPOCHS):
         "test/clipart_recall": clipart_test_recall,
 
     })
+    scheduler.step()
     
+
+# save_path = "models/10epochs_3fclayer_0.01lr_run.pth"
+torch.save(
+    {
+        "clip_visual_state_dict": model.visual.state_dict(),
+        "classifier_state_dict": classifier.state_dict(),
+        "num_classes": num_classes,
+    }, model_name)
+
+print(f"\nModel saved to: {model_name}")
+wandb.finish()
+
 
 # todo: save model with .p file 
 # todo: add f1 score (precision and recall)  - log in wandb - print

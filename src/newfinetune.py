@@ -154,6 +154,7 @@ def train_one_epoch(epoch):
 
         # CLIP image encoder
         image_features = model.encode_image(images)
+        # normalization
         image_features = image_features / image_features.norm(
             dim=-1, keepdim=True
         )
