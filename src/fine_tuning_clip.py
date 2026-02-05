@@ -11,6 +11,7 @@ import wandb
 from torch.utils.data import Subset
 from sklearn.metrics import f1_score, precision_score, recall_score
 import numpy as np
+from collections import Counter
 
 # wandb initialize
 model_name = "15epochs_infograph_clipart_5layers512_0.01lr_run"
@@ -114,32 +115,29 @@ image_features_dim = model.visual.output_dim
 
 ## three layer ##
 # - 512
-classifier  = nn.Sequential(
-    nn.Linear(image_features_dim, 512),
-    nn.ReLU(inplace=True),
-    nn.Dropout(0.1), #droupout changed to 0.1       
-    nn.Linear(512, 512),
-    nn.ReLU(inplace=True),
-    nn.Dropout(0.1),  
-    nn.Linear(512, 512),
-    nn.ReLU(inplace=True),
-    nn.Dropout(0.1),  
-    nn.Linear(512, 512),
-    nn.ReLU(inplace=True),
-    nn.Dropout(0.1),        
-    nn.Linear(512, num_classes)
-).to(device)
-
-# # - 1024
 # classifier  = nn.Sequential(
-#     nn.Linear(image_features_dim, 1024),
+#     nn.Linear(image_features_dim, 512),
 #     nn.ReLU(inplace=True),
 #     nn.Dropout(0.1), #droupout changed to 0.1       
-#     nn.Linear(1024, 1024),
+#     nn.Linear(512, 512),
+#     nn.ReLU(inplace=True),
+#     nn.Dropout(0.1),  
+#     nn.Linear(512, 512),
+#     nn.ReLU(inplace=True),
+#     nn.Dropout(0.1),  
+#     nn.Linear(512, 512),
 #     nn.ReLU(inplace=True),
 #     nn.Dropout(0.1),        
-#     nn.Linear(1024, num_classes)
+#     nn.Linear(512, num_classes)
 # ).to(device)
+
+# # - 1024 - 2
+classifier  = nn.Sequential(
+    nn.Linear(image_features_dim, 1024),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1), #droupout changed to 0.1       
+    nn.Linear(1024, num_classes)
+).to(device)
 
 
 
@@ -237,15 +235,39 @@ def evaluate(loader):
 
 
 print("Training Begins...")
-EPOCHS = 15
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(classifier.parameters(), lr=0.01, weight_decay=1e-5 )
+EPOCHS = 10
 
-scheduler = optim.lr_scheduler.StepLR(
-    optimizer,
-    step_size=5,
-    gamma=0.1
-)
+
+
+# making class weights for weighted cross entropy
+labels = [label for _, label in train_dataset.samples]
+class_counts = Counter(labels)
+total = len(labels)
+class_weights = [total / (num_classes * class_counts[i]) for i in range(num_classes)] # taking inverse of it 
+class_weights = torch.tensor(class_weights, dtype = torch.float).to(device)
+print("Class counts:", class_counts)
+print("Class weights:", class_weights)
+
+loss_type = "weighted_crossEntropy" # define the loss we want here 
+scheduler = "cosine"
+optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-5 )
+
+# loss definition
+if loss_type=="cross_entropy":
+    criterion = nn.CrossEntropyLoss()
+elif loss_type=="weighted_crossEntropy":
+    criterion  = nn.CrossEntropyLoss(weight=class_weights)
+else:
+    print("[ERROR] no loss found")
+
+# scheduler definition
+if scheduler == "cosine":
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
+elif scheduler == "StepLR":
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
+else: 
+    print("[ERROR] no scheduler found")
+
 
 for epoch in range(EPOCHS):
     train_loss, train_acc = train_one_epoch(criterion=criterion, optimizer=optimizer) # train acc = real train acc
