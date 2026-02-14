@@ -14,7 +14,7 @@ import numpy as np
 from collections import Counter
 
 # wandb initialize
-model_name = "15epochs_infograph_clipart_5layers512_0.01lr_run"
+model_name = "10epochs_infograph_clipart_2layers1024_0.001lr_run-stepLRSched-wCE"
 wandb.init(
     project="applied-dl-domain-adaptation",
     name=model_name,
@@ -249,7 +249,7 @@ print("Class counts:", class_counts)
 print("Class weights:", class_weights)
 
 loss_type = "weighted_crossEntropy" # define the loss we want here 
-scheduler = "cosine"
+scheduler = "StepLR"
 optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-5 )
 
 # loss definition

@@ -36,7 +36,6 @@ def grl(x, lambda_):
     return GradientReversal.apply(x, lambda_)
 
 #DANN head (feature level adaption)
-
 class DANNHead(nn.Module):
     def __init__(self, feature_dim, num_classes, hidden_dim=512):
         super().__init__()

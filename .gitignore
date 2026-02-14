@@ -4,3 +4,4 @@ models/
 wandb/
 *.sbatch
 *.pth
+15epochs_infograph_clipart_5layers512_0.01lr_run
