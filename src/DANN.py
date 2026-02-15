@@ -406,3 +406,11 @@ wandb.finish()
 
 ## with and without clip freezing (2 cases)
 ## constant and adaptive lamda values (2 cases)
+## SGD
+## tsne - before after
+
+
+#### after all things are done: ABLATIONS
+# a) Table showing (zero  shot -> finetuning -> dann) (for each real, inforgraph, clipart)
+# b) add mlp finetuning + domain adaptation
+# c) domain generlllization gap 

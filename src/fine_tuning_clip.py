@@ -342,3 +342,11 @@ wandb.finish()
 # todo: check the training
 # todo: check if we should do normalization or no 
 # todo: visualization - tsne 
+
+
+
+##### (a) ensemble methods - with and without diveristy loss
+#### (b) normal finetuning - (Hidden layer 256, 512, 1024), (MLP Layers - 1, 2, 5), (Parametes- LR (0.01, 0.001, 0.0001), Scheduler (LR, Cosine), Loss - (CE, wCE), A epoch graph showing no increase in performance and thereby justifying the choice behind choosing 10 epochs)
+#### ## tsne - before after
+#### domain generlllization gap 
+
