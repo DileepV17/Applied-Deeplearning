@@ -1,0 +1,53 @@
+images with model.encode on line 121 trying to encode before the variables was defined.
+
+Zero-shot on source(Real images): 0.7863078704363846
+Zero-shot on target(Infograph images): 0.40459765793876057
+
+# 3 FC layers finetuning
+normalization added
+lr= 0.001 (lr scheduler cosine)
+weightdecay = 1e-5
+added momentum default values
+ 
+ # ensembling subnetworks
+                         Input Sample x
+                               │
+                      ┌────────┴────────┐
+                      │                 │
+                 Augmentation 1    Augmentation 2
+                      │                 │
+                     x₁                x₂
+                      │                 │
+                      └────── Shared Encoder f(·) ───────┘
+                                 │
+                          Backbone Features h₁, h₂
+                                 │
+                 ┌───────────────┼───────────────┐
+                 │               │               │
+            SubNet 1         SubNet 2        SubNet K
+             g₁(·)            g₂(·)           g_K(·)
+                 │               │               │
+         z₁¹  z₂¹          z₁²  z₂²        z₁ᴷ  z₂ᴷ
+       (view1 view2)     (view1 view2)   (view1 view2)
+                 │               │               │
+                 └───────────────┼───────────────┘
+                                 │
+                      Mean Across Subnets
+                     μ₁ = mean(z₁¹…z₁ᴷ)
+                     μ₂ = mean(z₂¹…z₂ᴷ)
+                                 │
+                        Contrastive SSL Loss
+                            ℓ_ssl(μ₁, μ₂)
+                
+                ----------- std -> Diversity Loss
+
+> each subnetworks weights are initialized independently and trained 
+> compute mean of the three independent subnetworks
+> then calculate the CrossEntropyLoss(avg_logits, labels)
+> Now implement diversity mechanism(loss)
+> calculate the SD[h1, h2, h3]
+> Diversity Loss = max(0, alpha - mean(SD))
+> if disagreement is too small you penalize the model
+> if disagreement is too large then no penalty
+> Total loss ℓ = ℓCE ​+ λ * ℓdiv​
+

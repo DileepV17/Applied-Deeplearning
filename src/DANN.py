@@ -11,14 +11,13 @@ from tqdm import tqdm
 import os
 from PIL import Image
 import wandb
-
+from torch.utils.data import random_split
 import open_clip
+import torch.optim as optim
+
 
 # wandb initialize
-wandb.init(
-    project="applied-dl-domain-adaptation",
-    name="Implement_DANN",
-)
+wandb.init(project="applied-dl-domain-adaptation", name="dann-forzenCLIP-adaptiveLambda-0.001")
 
 # gradient reversal layer
 class GradientReversal(Function):
@@ -141,7 +140,13 @@ clip_model.visual.load_state_dict(checkpoint["clip_visual_state_dict"])
 clip_model.eval()
 print("Model loaded.")
 
-## Datasets placeholders
+######################
+# option a: freezing clip 
+for p in clip_model.parameters():
+    p.requires_grad = False
+
+# option b: not freezing clip -  no change
+######################
 
 # source_loader: (image, label) - labeled source domain
 # target_loader: (image) - unlabeled target domain for adaptation
@@ -155,25 +160,34 @@ train_dataset = DomainNetListDataset(
     transform=preprocess,
 )
 
-real_test_dataset = DomainNetListDataset(
+real_testing_dataset = DomainNetListDataset(
     root_dir="data/real",
     txt_file="data/real/real_test.txt",
     transform=preprocess,
 )
 
+val_size = int(len(real_testing_dataset) * 0.5)
+test_size = len(real_testing_dataset) - val_size
+real_val_dataset, real_test_dataset = random_split(real_testing_dataset, [val_size, test_size], generator=torch.Generator().manual_seed(42))
+
+
 # Target domain: UNLABELED for adaptation
 target_dataset = UnlabeledDomainDataset(
-    root_dir="data/infograph",
-    txt_file="data/infograph/infograph_train.txt",
+    root_dir="data/clipart",
+    txt_file="data/clipart/clipart_train.txt",
     transform=preprocess,
 )
 
 # Also load labeled infograph TEST dataset for evaluation (held-out)
-infograph_eval_dataset = DomainNetListDataset(
-    root_dir="data/infograph",
-    txt_file="data/infograph/infograph_test.txt",
+clipart_test_dataset = DomainNetListDataset(
+    root_dir="data/clipart",
+    txt_file="data/clipart/clipart_test.txt",
     transform=preprocess,
 )
+val_size = int(len(clipart_test_dataset) * 0.5)
+test_size = len(clipart_test_dataset) - val_size
+clipart_val_dataset, clipart_test_dataset = random_split(clipart_test_dataset, [val_size, test_size], generator=torch.Generator().manual_seed(42))
+
 
 num_classes = max(label for _, label in train_dataset.samples) + 1
 print(f"Loaded {len(train_dataset)} training samples, {num_classes} classes")
@@ -183,7 +197,9 @@ print("Preparing DataLoaders...")
 source_loader = DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=4)
 target_loader = DataLoader(target_dataset, batch_size=512, shuffle=True, num_workers=4)
 real_test_loader = DataLoader(real_test_dataset, batch_size=512, shuffle=False, num_workers=4)
-infograph_eval_loader = DataLoader(infograph_eval_dataset, batch_size=512, shuffle=False, num_workers=4)
+real_val_loader = DataLoader(real_val_dataset, batch_size=512, shuffle=False, num_workers=4)
+clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=512, shuffle=False, num_workers=4)
+clipart_val_loader = DataLoader(clipart_val_dataset, batch_size=512, shuffle=False, num_workers=4)
 print("DataLoaders ready.")
 
 #7. Initialize DANN
@@ -193,12 +209,23 @@ feature_dim = clip_model.visual.output_dim
 
 dann = DANNHead(feature_dim, num_classes).to(device)
 
+######################
+## option a: freezing CLIP
 optimizer = torch.optim.Adam(
     dann.parameters(),
-    lr=1e-4,
-    weight_decay=1e-4
+    lr=1e-3,
+    weight_decay=1e-5
 )
 
+
+## option b: not freezing CLIP
+# optimizer = torch.optim.Adam([
+#     {"params": clip_model.parameters(), "lr": 1e-6},
+#     {"params": dann.parameters(), "lr": 1e-3}
+# ], weight_decay=1e-5)
+######################
+
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
 class_criterion = nn.CrossEntropyLoss()
 domain_criterion = nn.BCEWithLogitsLoss()
 
@@ -282,13 +309,13 @@ plt.show()
 
 #10. DANN training loop
 print("Starting DANN training...")
-epochs = 10
+epochs = 20
 total_steps = epochs * min(len(source_loader), len(target_loader))
 global_step = 0
 
 for epoch in range(epochs):
     dann.train()
-
+    
     for (x_src, y_src), x_tgt in zip(source_loader, target_loader):
         x_src = x_src.to(device)
         y_src = y_src.to(device)
@@ -296,9 +323,16 @@ for epoch in range(epochs):
 
         lambda_ = dann_lambda(global_step, total_steps)
 
+        ######################
+        # option a: freezing clip 
         with torch.no_grad():
             f_src = clip_model.encode_image(x_src).float()
             f_tgt = clip_model.encode_image(x_tgt).float()
+
+        # option b: not freezing clip 
+        # f_src = clip_model.encode_image(x_src).float()
+        # f_tgt = clip_model.encode_image(x_tgt).float()
+        ######################
 
         class_logits, dom_logits_src = dann(f_src, lambda_)
         _, dom_logits_tgt = dann(f_tgt, lambda_)
@@ -319,6 +353,7 @@ for epoch in range(epochs):
         loss.backward()
         optimizer.step()
 
+
         # Log every 10 steps
         if global_step % 10 == 0:
             wandb.log({
@@ -328,11 +363,22 @@ for epoch in range(epochs):
                 "class_loss": class_loss.item(),
                 "domain_loss": domain_loss.item(),
                 "lambda": lambda_,
+
             })
 
         global_step += 1
-
+    
+    # eval 
+    real_val_acc = evaluate_accuracy(clip_model, dann, real_val_loader)
+    clipart_val_acc = evaluate_accuracy(clip_model, dann, clipart_val_loader)
     print(f"Epoch {epoch+1}/{epochs} | Loss: {loss.item():.4f}")
+    wandb.log({
+        "epoch": epoch,
+        "real_val_acc": real_val_acc,
+        "clipart_val_acc": clipart_val_acc,
+    })
+
+    scheduler.step()
 
 # Calculate accuracies after training
 print("\n" + "="*50)
@@ -340,46 +386,23 @@ print("Calculating accuracies after DANN adaptation...")
 print("="*50)
 
 real_test_acc = evaluate_accuracy(clip_model, dann, real_test_loader)
-infograph_test_acc = evaluate_accuracy(clip_model, dann, infograph_eval_loader)
+clipart_test_acc = evaluate_accuracy(clip_model, dann, clipart_test_loader)
 
 print(f"Real Test Accuracy: {real_test_acc:.4f}")
-print(f"Infograph Test Accuracy: {infograph_test_acc:.4f}")
+print(f"Clipart Test Accuracy: {clipart_test_acc:.4f}")
 
 wandb.log({
     "final/real_test_accuracy": real_test_acc,
-    "final/infograph_test_accuracy": infograph_test_acc,
+    "final/real_val_accuracy": real_val_acc,
+    "final/clipart_test_accuracy": clipart_test_acc,
+    "final/clipart_val_accuracy": clipart_val_acc
 })
 
-#11. t-sne after domain adaption
-
-print("\nExtracting features AFTER adaptation...")
-
-src_feats, src_dom = extract_tsne_features(
-    clip_model, dann, source_loader, domain_label=1
-)
-tgt_feats, tgt_dom = extract_tsne_features(
-    clip_model, dann, target_loader, domain_label=0
-)
-
-X = np.vstack([src_feats, tgt_feats])
-y = np.hstack([src_dom, tgt_dom])
-
-tsne = TSNE(n_components=2, perplexity=30, random_state=42)
-X_2d = tsne.fit_transform(X)
-
-plt.figure(figsize=(6, 6))
-plt.scatter(X_2d[y == 1, 0], X_2d[y == 1, 1], label="Source", alpha=0.6)
-plt.scatter(X_2d[y == 0, 0], X_2d[y == 0, 1], label="Target", alpha=0.6)
-plt.legend()
-plt.title("t-SNE AFTER Domain Adaptation")
-plt.savefig("tsne_after_adaptation.png", dpi=150, bbox_inches='tight')
-wandb.log({"tsne_after_adaptation": wandb.Image("tsne_after_adaptation.png")})
-plt.show()
-
-# Finish wandb run
 wandb.finish()
 
 
 
 
 
+## with and without clip freezing (2 cases)
+## constant and adaptive lamda values (2 cases)
