@@ -17,9 +17,10 @@ model = model.to(device)
 # I will use infograhic and real as source and target for now
 infograph_data = datasets.ImageFolder("data/infograph/infograph", transform=preprocess)
 real_data = datasets.ImageFolder("data/real/real", transform=preprocess)
-
-infograph_loader = DataLoader(infograph_data, batch_size=32, shuffle=True)
-real_loader = DataLoader(real_data, batch_size=32, shuffle=False)
+clipart_data = datasets.ImageFolder("data/clipart/clipart", transform=preprocess)
+infograph_loader = DataLoader(infograph_data, batch_size=512, shuffle=True)
+real_loader = DataLoader(real_data, batch_size=512, shuffle=False)
+clipart_loader = DataLoader(clipart_data, batch_size=512, shuffle=False)
 
 class_names = infograph_data.classes
 text_inputs = tokenizer(class_names)
@@ -47,3 +48,4 @@ def zero_shot_eval(dataloader):
 
 print("Zero-shot on infograph_data:", zero_shot_eval(infograph_loader))
 print("Zero-shot on real_data:", zero_shot_eval(real_loader))
+print("Zero-shot on clipart_data:", zero_shot_eval(clipart_loader))
