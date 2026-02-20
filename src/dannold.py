@@ -15,13 +15,18 @@ from torch.utils.data import random_split
 import open_clip
 import torch.optim as optim
 
-METHOD = "frozen" # "unfrozen" # "frozen"
+METHOD = "unfrozen" # "unfrozen" # "frozen"
+TEST_ON = "infograph" # "clipart" # sketch
+epochs = 20
+SCHEDULER = "stepLR" # stepLR
+LR_clip = "1e-4"
+LR_dannHead = "1e-2"
 # NORMALIZE = "yes"
 # wandb initialize
 if METHOD=="frozen":
-    wandb.init(project="applied-dl-domain-adaptation", name="dann-forzenCLIP-adaptiveLambda-0.001(19.02.19:27)")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_clip{METHOD}_Dann_adaptedLamda_{LR_clip}clip_{LR_dannHead}dann_{SCHEDULER}")
 elif METHOD=="unfrozen":
-    wandb.init(project="applied-dl-domain-adaptation", name="dann-unforzenCLIP-adaptiveLambda-0.001(19.02.19:27)")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_clip{METHOD}_Dann_adaptedLamda_{LR_clip}clip_{LR_dannHead}dann_{SCHEDULER}")
 
 # gradient reversal layer
 class GradientReversal(Function):
@@ -39,21 +44,75 @@ def grl(x, lambda_):
     return GradientReversal.apply(x, lambda_)
 
 #DANN head (feature level adaption)
+# class DANNHead(nn.Module):
+#     def __init__(self, feature_dim, num_classes, hidden_dim=512):
+#         super().__init__()
+#         # 1 linear
+#         self.adapter = nn.Sequential(
+#             nn.Linear(feature_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Dropout(0.2)
+#         )
+#         # 1 linear
+#         self.class_classifier = nn.Linear(hidden_dim, num_classes)
+
+#         # 2 linear
+#         self.domain_classifier = nn.Sequential(
+#             nn.Linear(hidden_dim, 256),
+#             nn.ReLU(),
+#             nn.Linear(256, 1)
+#         )
+
+#     def forward(self, features, lambda_=0.0):
+#         features = self.adapter(features)
+
+#         class_logits = self.class_classifier(features)
+
+#         rev_features = grl(features, lambda_)
+#         domain_logits = self.domain_classifier(rev_features)
+
+#         return class_logits, domain_logits
+
+#     def extract_features(self, features):
+#         return self.adapter(features)
+
 class DANNHead(nn.Module):
-    def __init__(self, feature_dim, num_classes, hidden_dim=512):
+    def __init__(self, feature_dim, num_classes, hidden_dim=1024):
         super().__init__()
 
+        # 3-layer adapter
         self.adapter = nn.Sequential(
             nn.Linear(feature_dim, hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.2)
+            nn.Dropout(0.2),
+
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
         )
 
-        self.class_classifier = nn.Linear(hidden_dim, num_classes)
-
-        self.domain_classifier = nn.Sequential(
-            nn.Linear(hidden_dim, 256),
+        # 3-layer class classifier
+        self.class_classifier = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
+
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+        # 3-layer domain classifier
+        self.domain_classifier = nn.Sequential(
+            nn.Linear(hidden_dim, 512),
+            nn.ReLU(),
+
+            nn.Linear(512, 256),
+            nn.ReLU(),
+
             nn.Linear(256, 1)
         )
 
@@ -69,8 +128,8 @@ class DANNHead(nn.Module):
 
     def extract_features(self, features):
         return self.adapter(features)
+        
 # lambda schedule (standard DANN)
-
 def dann_lambda(step, max_steps):
     p = step / max_steps
     return 2. / (1. + math.exp(-10 * p)) - 1
@@ -162,7 +221,7 @@ elif METHOD=="unfrozen":
 # Load Datasets
 print("Loading Datasets...")
 
-train_dataset = DomainNetListDataset(
+real_train_dataset = DomainNetListDataset(
     root_dir="data/real",
     txt_file="data/real/real_train.txt",
     transform=preprocess,
@@ -180,34 +239,41 @@ real_val_dataset, real_test_dataset = random_split(real_testing_dataset, [val_si
 
 
 # Target domain: UNLABELED for adaptation
-target_dataset = UnlabeledDomainDataset(
-    root_dir="data/infograph",
-    txt_file="data/infograph/infograph_train.txt",
+if TEST_ON =="infograph":
+    datapath_name = "infograph"
+elif  TEST_ON =="clipart":
+    datapath_name = "clipart"
+elif  TEST_ON =="sketch":
+    datapath_name = "sketch"
+
+target_train_dataset = UnlabeledDomainDataset(
+    root_dir=f"data/{datapath_name}",
+    txt_file=f"data/{datapath_name}/{datapath_name}_train.txt",
     transform=preprocess,
 )
 
 # Also load labeled infograph TEST dataset for evaluation (held-out)
-clipart_test_dataset = DomainNetListDataset(
-    root_dir="data/infograph",
-    txt_file="data/infograph/infograph_test.txt",
+target_test_dataset = DomainNetListDataset(
+    root_dir=f"data/{datapath_name}",
+    txt_file=f"data/{datapath_name}/{datapath_name}_test.txt",
     transform=preprocess,
 )
-val_size = int(len(clipart_test_dataset) * 0.5)
-test_size = len(clipart_test_dataset) - val_size
-clipart_val_dataset, clipart_test_dataset = random_split(clipart_test_dataset, [val_size, test_size], generator=torch.Generator().manual_seed(42))
+val_size = int(len(target_test_dataset) * 0.5)
+test_size = len(target_test_dataset) - val_size
+target_val_dataset, target_test_dataset = random_split(target_test_dataset, [val_size, test_size], generator=torch.Generator().manual_seed(42))
 
 
-num_classes = max(label for _, label in train_dataset.samples) + 1
-print(f"Loaded {len(train_dataset)} training samples, {num_classes} classes")
+num_classes = max(label for _, label in real_train_dataset.samples) + 1
+print(f"Loaded {len(real_train_dataset)} training samples, {num_classes} classes")
 print("Datasets loaded.")
 
 print("Preparing DataLoaders...")
-source_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
-target_loader = DataLoader(target_dataset, batch_size=64, shuffle=True, num_workers=4)
-real_test_loader = DataLoader(real_test_dataset, batch_size=64, shuffle=False, num_workers=4)
-real_val_loader = DataLoader(real_val_dataset, batch_size=64, shuffle=False, num_workers=4)
-clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=64, shuffle=False, num_workers=4)
-clipart_val_loader = DataLoader(clipart_val_dataset, batch_size=64, shuffle=False, num_workers=4)
+real_train_loader = DataLoader(real_train_dataset, batch_size=64, shuffle=True, num_workers=4) # train data (S)
+real_test_loader = DataLoader(real_test_dataset, batch_size=64, shuffle=False, num_workers=4) # test  (S)
+real_val_loader = DataLoader(real_val_dataset, batch_size=64, shuffle=False, num_workers=4) # val (S)
+target_train_loader = DataLoader(target_train_dataset, batch_size=64, shuffle=True, num_workers=4) # train data
+target_test_loader = DataLoader(target_test_dataset, batch_size=64, shuffle=False, num_workers=4)
+target_val_loader = DataLoader(target_val_dataset, batch_size=64, shuffle=False, num_workers=4)
 print("DataLoaders ready.")
 
 #7. Initialize DANN
@@ -217,21 +283,13 @@ feature_dim = clip_model.visual.output_dim
 
 dann = DANNHead(feature_dim, num_classes).to(device)
 
-######################
-## option a: freezing CLIP
-# optimizer = torch.optim.Adam(
-#     dann.parameters(),
-#     lr=1e-3,
-#     weight_decay=1e-5
-# )
-
-## for unfrozen clip
+# optimizer
 if METHOD=="frozen":
         optimizer = torch.optim.Adam( dann.parameters(), lr=1e-3, weight_decay=1e-5)
 elif METHOD=="unfrozen":
     optimizer = torch.optim.Adam([
-        {"params": clip_model.parameters(), "lr": 1e-6},
-        {"params": dann.parameters(), "lr": 1e-3}
+        {"params": clip_model.parameters(), "lr": LR_clip}, # clip backbone # baseline at 1e-6
+        {"params": dann.parameters(), "lr": LR_dannHead} # dann head # baseline at 1e-3
     ], weight_decay=1e-5)
 
 
@@ -241,8 +299,10 @@ elif METHOD=="unfrozen":
 #     {"params": dann.parameters(), "lr": 1e-3}
 # ], weight_decay=1e-5)
 ######################
-
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
+if SCHEDULER =="stepLR":
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
+elif SCHEDULER =="cosine":
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = epochs)
 class_criterion = nn.CrossEntropyLoss()
 domain_criterion = nn.BCEWithLogitsLoss()
 
@@ -303,10 +363,10 @@ def extract_tsne_features(clip_model, dann, loader, domain_label, max_batches=20
 print("Extracting features BEFORE adaptation...")
 
 src_feats, src_dom = extract_tsne_features(
-    clip_model, dann, source_loader, domain_label=1
+    clip_model, dann, real_train_loader, domain_label=1
 )
 tgt_feats, tgt_dom = extract_tsne_features(
-    clip_model, dann, target_loader, domain_label=0
+    clip_model, dann, target_train_loader, domain_label=0
 )
 
 X = np.vstack([src_feats, tgt_feats])
@@ -326,14 +386,13 @@ plt.show()
 
 #10. DANN training loop
 print("Starting DANN training...")
-epochs = 20
-total_steps = epochs * min(len(source_loader), len(target_loader))
+total_steps = epochs * min(len(real_train_loader), len(target_train_loader))
 global_step = 0
 
 for epoch in range(epochs):
     dann.train()
     
-    for (x_src, y_src), x_tgt in zip(source_loader, target_loader):
+    for (x_src, y_src), x_tgt in zip(real_train_loader, target_train_loader):
         x_src = x_src.to(device)
         y_src = y_src.to(device)
         x_tgt = x_tgt.to(device)
@@ -394,12 +453,13 @@ for epoch in range(epochs):
     
     # eval 
     real_val_acc = evaluate_accuracy(clip_model, dann, real_val_loader)
-    clipart_val_acc = evaluate_accuracy(clip_model, dann, clipart_val_loader)
-    print(f"Epoch {epoch+1}/{epochs} | Loss: {loss.item():.4f}")
+    target_val_acc = evaluate_accuracy(clip_model, dann, target_val_loader)
+    print(f"Epoch {epoch+1}/{epochs} | Loss: {loss.item():.4f} | real_val_acc: {real_val_acc} | target_val_acc: {target_val_acc}")
+
     wandb.log({
         "epoch": epoch,
         "real_val_acc": real_val_acc,
-        "clipart_val_acc": clipart_val_acc,
+        "target_val_acc": target_val_acc,
     })
 
     scheduler.step()
@@ -410,16 +470,16 @@ print("Calculating accuracies after DANN adaptation...")
 print("="*50)
 
 real_test_acc = evaluate_accuracy(clip_model, dann, real_test_loader)
-clipart_test_acc = evaluate_accuracy(clip_model, dann, clipart_test_loader)
+target_test_acc = evaluate_accuracy(clip_model, dann, target_test_loader)
 
 print(f"Real Test Accuracy: {real_test_acc:.4f}")
-print(f"Clipart Test Accuracy: {clipart_test_acc:.4f}")
+print(f"Target Test Accuracy: {target_test_acc:.4f}")
 
 wandb.log({
     "final/real_test_accuracy": real_test_acc,
     "final/real_val_accuracy": real_val_acc,
-    "final/clipart_test_accuracy": clipart_test_acc,
-    "final/clipart_val_accuracy": clipart_val_acc
+    "final/target_test_accuracy": target_test_acc,
+    "final/target_val_accuracy": target_val_acc
 })
 
 wandb.finish()
@@ -428,10 +488,12 @@ wandb.finish()
 
 # save model 
 if METHOD == "frozen":
-    model_save_path = f"models/dann/realinfograph_Dann_adapted_clip{METHOD}.pth"
+    model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
 elif METHOD =="unfrozen":
-    model_save_path = f"models/dann/realinfograph_Dann_adapted_clip{METHOD}.pth"
-    
+    model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
+
+
+
 torch.save({
     "clip_visual_state_dict": clip_model.visual.state_dict(),
     "dann_state_dict": dann.state_dict(),
