@@ -14,7 +14,7 @@ import wandb
 # =========================================================
 # 1. W&B
 # =========================================================
-model_name = "3fcensemble_corrected_without_diversity_loss"
+model_name = "3fcensemble_corrected_woDL_cosine_0.001_2l"
 wandb.init(
     project="applied-dl-domain-adaptation",
     name=model_name,
@@ -119,9 +119,9 @@ class FC_EnsembleMember(nn.Module):
             nn.Linear(input_dim, 1024),
             nn.ReLU(inplace=True),
             nn.Dropout(0.1),
-            nn.Linear(1024, 1024),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
+            # nn.Linear(1024, 1024),
+            # nn.ReLU(inplace=True),
+            # nn.Dropout(0.1),
             nn.Linear(1024, num_classes),
         )
 
@@ -245,18 +245,18 @@ def evaluate(model, loader):
 # =========================================================
 # 9. OPTIMIZER
 # =========================================================
-EPOCHS = 15
+EPOCHS = 10
 
 optimizer = optim.Adam(
     ensemble_model.ensembles.parameters(),
-    lr=1e-2,
-    weight_decay=1e-5
+    lr=1e-3,
+    weight_decay=1e-4
 )
 
-# scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-#     optimizer, T_max=EPOCHS
-# )
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=EPOCHS
+)
+# scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
 
 # =========================================================
 # 10. TRAIN LOOP

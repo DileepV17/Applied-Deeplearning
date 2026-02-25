@@ -14,7 +14,11 @@ import numpy as np
 from collections import Counter
 
 # wandb initialize
-model_name = "10epochs_infograph_clipart_2layers1024_0.001lr_run-StepLR-CE"
+# run 1- wo LS 
+# run2 = with LS
+loss_type = "cross_entropy_woLS" # cross_entropy_withLS , weighted_crossEntropy, cross_entropy_woLS
+scheduler = "cosine"
+model_name = f"10epochs_infograph_clipart_2layers1024_0.001lr_run-{scheduler}-{loss_type}"
 wandb.init(
     project="applied-dl-domain-adaptation",
     name=model_name,
@@ -98,10 +102,10 @@ print("STEP 2 COMPLETE")
 
 
 print("STEP 3: Creating the data loaders...")
-train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True, num_workers=4)
-real_test_loader = DataLoader(real_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
-infograph_test_loader = DataLoader(infograph_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
-clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=1024, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
+real_test_loader = DataLoader(real_test_dataset, batch_size=64, shuffle=False, num_workers=4)
+infograph_test_loader = DataLoader(infograph_test_dataset, batch_size=64, shuffle=False, num_workers=4)
+clipart_test_loader = DataLoader(clipart_test_dataset, batch_size=64, shuffle=False, num_workers=4)
 print("STEP 3 COMPLETE")
 
 # num_classes = len(train_dataset.classes) # to check
@@ -143,11 +147,11 @@ classifier  = nn.Sequential(
 
 # Freeze CLIP visual encoder - only train the classifier
 for param in model.visual.parameters():
-    param.requires_grad = False
+    param.requires_grad = True
 
 
 def train_one_epoch(criterion, optimizer ):
-    model.eval()  # Set model to eval mode to disable dropout and batch norm updates
+    model.train()  # Set model to eval mode to disable dropout and batch norm updates
     classifier.train()
 
     total_loss = 0
@@ -158,8 +162,8 @@ def train_one_epoch(criterion, optimizer ):
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad() 
-        with torch.no_grad():
-            image_features = model.encode_image(images) # we only use the clip image encoder and ignore the text encoder since we have only images and no text pairs
+        # with torch.no_grad():
+        image_features = model.encode_image(images) # we only use the clip image encoder and ignore the text encoder since we have only images and no text pairs
 
         # Normalize features
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # added normalization
@@ -171,6 +175,10 @@ def train_one_epoch(criterion, optimizer ):
         bs = labels.size(0) # to avoid the last batch size being smaller inconsistency
         
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(
+            list(model.visual.parameters()) + list(classifier.parameters()),
+            max_norm=1.0
+        )
         optimizer.step()
 
         total_loss += loss.item() * bs # prev: for one batch + one batch / total batch len(trai_loader) --- new: for each sample in the batch (512)+ each sample in the batch  (512)+ 200  == all samples loss / (all samples)
@@ -246,13 +254,22 @@ class_weights = torch.tensor(class_weights, dtype = torch.float).to(device)
 print("Class counts:", class_counts)
 print("Class weights:", class_weights)
 
-loss_type = "cross_entropy" # define the loss we want here 
-scheduler = "StepLR"
-optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-5 )
+
+optimizer = torch.optim.AdamW(
+    [
+        {"params": classifier.parameters(), "lr": 1e-3, "weight_decay": 1e-4},
+        {"params": model.visual.parameters(), "lr": 2e-6, "weight_decay": 1e-4},
+    ]
+)
 
 # loss definition
-if loss_type=="cross_entropy":
+label_smoothing = 0.1
+if loss_type=="cross_entropy_woLS":
     criterion = nn.CrossEntropyLoss()
+    print("[INFO] Using Cross entropy loss") 
+elif loss_type=="cross_entropy_withLS":
+    criterion = nn.CrossEntropyLoss(label_smoothing = label_smoothing)
+    print("[INFO] Using CE with label smoothening") 
 elif loss_type=="weighted_crossEntropy":
     criterion  = nn.CrossEntropyLoss(weight=class_weights)
 else:

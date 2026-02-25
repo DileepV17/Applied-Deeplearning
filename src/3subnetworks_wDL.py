@@ -14,7 +14,7 @@ import numpy as np
 # =========================================================
 # 1. W&B
 # =========================================================
-model_name = "3fcensemble_with_diversity_loss"
+model_name = "3fcensemble_corrected_wDL_cosine_0.001_2l"
 wandb.init(
     project="applied-dl-domain-adaptation",
     name=model_name,
@@ -112,8 +112,8 @@ class FC_EnsembleMember(nn.Module):
     def __init__(self, input_dim, num_classes):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, 1024)
-        self.fc2 = nn.Linear(1024, 1024)
-        self.fc3 = nn.Linear(1024, num_classes)
+        self.fc2 = nn.Linear(1024, num_classes)
+        # self.fc3 = nn.Linear(1024, num_classes)
 
         self.relu = nn.ReLU(inplace=True)
         self.dropout = nn.Dropout(0.1)
@@ -121,9 +121,9 @@ class FC_EnsembleMember(nn.Module):
     def forward(self, x):
         h = self.relu(self.fc1(x))
         h = self.dropout(h)
-        h = self.relu(self.fc2(h))
-        h = self.dropout(h)
-        logits = self.fc3(h)
+        # h = self.relu(self.fc2(h))
+        # h = self.dropout(h)
+        logits = self.fc2(h)
         return logits, h  # return embedding for diversity
 
 
@@ -275,17 +275,20 @@ def evaluate(model, loader, device):
 # =========================================================
 # 9. OPTIMIZER
 # =========================================================
-EPOCHS = 15
+EPOCHS = 10
 
-optimizer = torch.optim.Adam(
+
+
+# scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
+
+
+optimizer = optim.Adam(
     ensemble_model.ensembles.parameters(),
     lr=1e-3,
-    weight_decay=1e-5
+    weight_decay=1e-4
 )
 
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
-
-
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 # =========================================================
 # 10. TRAINING LOOP
 # =========================================================
