@@ -323,14 +323,14 @@ for epoch in range(EPOCHS):
     
 
 # save_path = "models/10epochs_3fclayer_0.01lr_run.pth"
-torch.save(
-    {
-        "clip_visual_state_dict": model.visual.state_dict(),
-        "classifier_state_dict": classifier.state_dict(),
-        "num_classes": num_classes,
-    }, model_name)
+# torch.save(
+#     {
+#         "clip_visual_state_dict": model.visual.state_dict(),
+#         "classifier_state_dict": classifier.state_dict(),
+#         "num_classes": num_classes,
+#     }, model_name)
 
-print(f"\nModel saved to: {model_name}")
+# print(f"\nModel saved to: {model_name}")
 wandb.finish()
 
 

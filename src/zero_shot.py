@@ -16,20 +16,23 @@ model = model.to(device)
 # Suppose you already split data into source/target folders
 # I will use infograhic and real as source and target for now
 infograph_data = datasets.ImageFolder("data/infograph/infograph", transform=preprocess)
-real_data = datasets.ImageFolder("data/real/real", transform=preprocess)
-clipart_data = datasets.ImageFolder("data/clipart/clipart", transform=preprocess)
-infograph_loader = DataLoader(infograph_data, batch_size=512, shuffle=True)
-real_loader = DataLoader(real_data, batch_size=512, shuffle=False)
-clipart_loader = DataLoader(clipart_data, batch_size=512, shuffle=False)
+# # real_data = datasets.ImageFolder("data/real/real", transform=preprocess)
+# # clipart_data = datasets.ImageFolder("data/clipart/clipart", transform=preprocess)
+# sketch_data = datasets.ImageFolder("data/sketch/sketch", transform=preprocess)
+infograph_loader = DataLoader(infograph_data, batch_size=512, shuffle=False)
+# real_loader = DataLoader(real_data, batch_size=512, shuffle=False)
+# clipart_loader = DataLoader(clipart_data, batch_size=512, shuffle=False)
+#sketch_loader = DataLoader(sketch_data, batch_size=512, shuffle=False)
+painting_data = datasets.ImageFolder("data/painting/painting", transform=preprocess)
+painting_loader = DataLoader(painting_data, batch_size=512, shuffle=False)
 
 class_names = infograph_data.classes
-text_inputs = tokenizer(class_names)
+text_features = model.encode_text(tokenizer(class_names).to(device))
+text_features /= text_features.norm(dim=-1, keepdim=True)
 
 
 # evaluate on zero shot learning
-def zero_shot_eval(dataloader):
-    text_features = model.encode_text(tokenizer(class_names).to(device))
-    text_features /= text_features.norm(dim=-1, keepdim=True)
+def zero_shot_eval(dataloader, text_features):
 
     correct, total = 0, 0
     with torch.no_grad():
@@ -46,6 +49,8 @@ def zero_shot_eval(dataloader):
 
     return correct / total
 
-print("Zero-shot on infograph_data:", zero_shot_eval(infograph_loader))
-print("Zero-shot on real_data:", zero_shot_eval(real_loader))
-print("Zero-shot on clipart_data:", zero_shot_eval(clipart_loader))
+#print("Zero-shot on infograph_data:", zero_shot_eval(infograph_loader, text_features))
+# print("Zero-shot on real_data:", zero_shot_eval(real_loader, text_features))
+# print("Zero-shot on clipart_data:", zero_shot_eval(clipart_loader, text_features))
+#print("Zero-shot on sketch_data:", zero_shot_eval(sketch_loader, text_features))
+print("Zero-shot on painting_data:", zero_shot_eval(painting_loader, text_features))

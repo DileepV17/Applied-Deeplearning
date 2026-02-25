@@ -14,14 +14,18 @@ import wandb
 from torch.utils.data import random_split
 import open_clip
 import torch.optim as optim
+import itertools
+from itertools import cycle
 
-METHOD = "unfrozen" # "unfrozen" # "frozen"
-TEST_ON = "infograph" # "clipart" # sketch
-epochs = 20
-SCHEDULER = "stepLR" # stepLR
-LR_clip = "1e-4"
-LR_dannHead = "1e-2"
-# NORMALIZE = "yes"
+METHOD = "frozen" # "unfrozen" # "frozen"
+TEST_ON = "clipart" # "clipart" # sketch # infograph # painting
+SCHEDULER = "cosine" # stepLR # cosine
+epochs = 10
+LR_clip = 1e-6 #5e-7
+LR_dannHead = "defined separately" #2e-4 #5e-4  #1e-3 (reduced for stability)
+BATCH_SIZE = 64  # Reduced from 256 for more stable gradient updates
+print("using Total loss with alpha weighting and not using normalization of features inside the DANN_head, but using batch norm in the dann_head")
+# NORMALIZE = "no"
 # wandb initialize
 if METHOD=="frozen":
     wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_clip{METHOD}_Dann_adaptedLamda_{LR_clip}clip_{LR_dannHead}dann_{SCHEDULER}")
@@ -37,90 +41,68 @@ class GradientReversal(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return -ctx.lambda_ * grad_output, None
+        return -ctx.lambda_ * grad_output, None  # gradient reversal layer
 
 
 def grl(x, lambda_):
     return GradientReversal.apply(x, lambda_)
 
-#DANN head (feature level adaption)
-# class DANNHead(nn.Module):
-#     def __init__(self, feature_dim, num_classes, hidden_dim=512):
-#         super().__init__()
-#         # 1 linear
-#         self.adapter = nn.Sequential(
-#             nn.Linear(feature_dim, hidden_dim),
-#             nn.ReLU(),
-#             nn.Dropout(0.2)
-#         )
-#         # 1 linear
-#         self.class_classifier = nn.Linear(hidden_dim, num_classes)
-
-#         # 2 linear
-#         self.domain_classifier = nn.Sequential(
-#             nn.Linear(hidden_dim, 256),
-#             nn.ReLU(),
-#             nn.Linear(256, 1)
-#         )
-
-#     def forward(self, features, lambda_=0.0):
-#         features = self.adapter(features)
-
-#         class_logits = self.class_classifier(features)
-
-#         rev_features = grl(features, lambda_)
-#         domain_logits = self.domain_classifier(rev_features)
-
-#         return class_logits, domain_logits
-
-#     def extract_features(self, features):
-#         return self.adapter(features)
-
-class DANNHead(nn.Module):
-    def __init__(self, feature_dim, num_classes, hidden_dim=1024):
+class DANNHead(nn.Module): # DANN head with shared adapter, class classifier, and domain discriminator
+    def __init__(self, feature_dim, num_classes, hidden_dim=512):
         super().__init__()
 
-        # 3-layer adapter
+        # Shared feature adapter (compress input features)
         self.adapter = nn.Sequential(
             nn.Linear(feature_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),  # Added batch norm for stability
             nn.ReLU(),
-            nn.Dropout(0.2),
-
-            nn.Linear(hidden_dim, hidden_dim),
+            
+            nn.Linear(hidden_dim, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Linear(256, 256),
+            nn.BatchNorm1d(256),
+            nn.Dropout(0.1),
+            nn.ReLU(),     #adding one more layer
 
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
+            # nn.ReLU(),
+            # nn.Dropout(0.1),
+            # nn.Linear(hidden_dim, hidden_dim),
+      
         )
 
-        # 3-layer class classifier
+        # Task-specific class classifier (main task)
         self.class_classifier = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-
-            nn.Linear(hidden_dim, num_classes)
+        nn.Linear(256, 256),
+        nn.BatchNorm1d(256),
+        nn.ReLU(),
+        nn.Linear(256, num_classes) # adding one more layer here as well, to match the adapter output
+            # nn.ReLU(),
+            # nn.Linear(hidden_dim, num_classes)
         )
+            
+        
 
-        # 3-layer domain classifier
+        # Domain discriminator (simpler than class classifier per DANN)
         self.domain_classifier = nn.Sequential(
-            nn.Linear(hidden_dim, 512),
+            nn.Linear(256, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
-
-            nn.Linear(512, 256),
-            nn.ReLU(),
-
             nn.Linear(256, 1)
         )
+            
+            
+            
+        
 
-    def forward(self, features, lambda_=0.0):
+    def forward(self, features, lambda_=1.0):
         features = self.adapter(features)
+        #features = F.normalize(features, dim=-1) ## normalising only inside the dann head.
 
+        # Class branch
         class_logits = self.class_classifier(features)
 
+        # Domain branch with GRL
         rev_features = grl(features, lambda_)
         domain_logits = self.domain_classifier(rev_features)
 
@@ -128,11 +110,16 @@ class DANNHead(nn.Module):
 
     def extract_features(self, features):
         return self.adapter(features)
-        
-# lambda schedule (standard DANN)
-def dann_lambda(step, max_steps):
+
+
+
+# # lambda schedule (standard DANN)
+# def dann_lambda(step, max_steps):
+#     p = step / max_steps
+#     return 2. / (1. + math.exp(-10 * p)) - 1
+def dann_lambda(step, max_steps, lam_max=0.8):
     p = step / max_steps
-    return 2. / (1. + math.exp(-10 * p)) - 1
+    return lam_max * (2. / (1. + math.exp(-10 * p)) - 1)
 
 # Dataset classes
 class DomainNetListDataset(Dataset):
@@ -195,25 +182,24 @@ clip_model, _, preprocess = open_clip.create_model_and_transforms(
     pretrained="openai"
 )
 clip_model = clip_model.to(device)
-clip_model.eval()
+
+
+print("CLIP model loaded.")
 # Load fine-tuned weights
 #print("Loading fine-tuned weights...")
 # checkpoint = torch.load("clip_real_finetuned.pth", map_location=device)
 # clip_model.visual.load_state_dict(checkpoint["clip_visual_state_dict"])
-# clip_model.eval()
 # print("Model loaded.")
 
-######################
-# option a: freezing clip 
+# Freeze CLIP if using frozen mode
 if METHOD=="frozen":
     for p in clip_model.parameters():
         p.requires_grad = False
+    clip_model.eval()  # Set eval mode only when frozen
 elif METHOD=="unfrozen":
     for p in clip_model.parameters():
         p.requires_grad = True
-
-# option b: not freezing clip -  no change
-######################
+    clip_model.train()  # Set train mode if unfrozen
 
 # source_loader: (image, label) - labeled source domain
 # target_loader: (image) - unlabeled target domain for adaptation
@@ -232,7 +218,7 @@ real_testing_dataset = DomainNetListDataset(
     txt_file="data/real/real_test.txt",
     transform=preprocess,
 )
-
+print(" using real as sourse domain this time")
 val_size = int(len(real_testing_dataset) * 0.5)
 test_size = len(real_testing_dataset) - val_size
 real_val_dataset, real_test_dataset = random_split(real_testing_dataset, [val_size, test_size], generator=torch.Generator().manual_seed(42))
@@ -245,6 +231,8 @@ elif  TEST_ON =="clipart":
     datapath_name = "clipart"
 elif  TEST_ON =="sketch":
     datapath_name = "sketch"
+elif  TEST_ON =="painting":
+    datapath_name = "painting"
 
 target_train_dataset = UnlabeledDomainDataset(
     root_dir=f"data/{datapath_name}",
@@ -265,15 +253,16 @@ target_val_dataset, target_test_dataset = random_split(target_test_dataset, [val
 
 num_classes = max(label for _, label in real_train_dataset.samples) + 1
 print(f"Loaded {len(real_train_dataset)} training samples, {num_classes} classes")
+#print(len(real_train_loader), len(target_train_loader))
 print("Datasets loaded.")
 
 print("Preparing DataLoaders...")
-real_train_loader = DataLoader(real_train_dataset, batch_size=64, shuffle=True, num_workers=4) # train data (S)
-real_test_loader = DataLoader(real_test_dataset, batch_size=64, shuffle=False, num_workers=4) # test  (S)
-real_val_loader = DataLoader(real_val_dataset, batch_size=64, shuffle=False, num_workers=4) # val (S)
-target_train_loader = DataLoader(target_train_dataset, batch_size=64, shuffle=True, num_workers=4) # train data
-target_test_loader = DataLoader(target_test_dataset, batch_size=64, shuffle=False, num_workers=4)
-target_val_loader = DataLoader(target_val_dataset, batch_size=64, shuffle=False, num_workers=4)
+real_train_loader = DataLoader(real_train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4) # train data (S)
+real_test_loader = DataLoader(real_test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4) # test  (S)
+real_val_loader = DataLoader(real_val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4) # val (S)
+target_train_loader = DataLoader(target_train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4) # train data
+target_test_loader = DataLoader(target_test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+target_val_loader = DataLoader(target_val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 print("DataLoaders ready.")
 
 #7. Initialize DANN
@@ -283,9 +272,14 @@ feature_dim = clip_model.visual.output_dim
 
 dann = DANNHead(feature_dim, num_classes).to(device)
 
-# optimizer
+#optimizer
 if METHOD=="frozen":
-        optimizer = torch.optim.Adam( dann.parameters(), lr=1e-3, weight_decay=1e-5)
+    optimizer = torch.optim.Adam([
+        {"params": dann.adapter.parameters(), "lr": 1e-2},
+        {"params": dann.class_classifier.parameters(), "lr": 1e-2},
+        {"params": dann.domain_classifier.parameters(), "lr": 1e-3},  
+        ], weight_decay=1e-5)
+        #optimizer = torch.optim.Adam( dann.parameters(), lr=LR_dannHead, weight_decay=1e-5)
 elif METHOD=="unfrozen":
     optimizer = torch.optim.Adam([
         {"params": clip_model.parameters(), "lr": LR_clip}, # clip backbone # baseline at 1e-6
@@ -293,16 +287,13 @@ elif METHOD=="unfrozen":
     ], weight_decay=1e-5)
 
 
-## option b: not freezing CLIP
-# optimizer = torch.optim.Adam([
-#     {"params": clip_model.parameters(), "lr": 1e-6},
-#     {"params": dann.parameters(), "lr": 1e-3}
-# ], weight_decay=1e-5)
-######################
-if SCHEDULER =="stepLR":
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5,gamma=0.1)
-elif SCHEDULER =="cosine":
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = epochs)
+
+if SCHEDULER=="stepLR":
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+elif SCHEDULER=="cosine":
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+else:
+    raise ValueError(f"Unknown scheduler: {SCHEDULER}. Choose 'stepLR' or 'cosine'")
 class_criterion = nn.CrossEntropyLoss()
 domain_criterion = nn.BCEWithLogitsLoss()
 
@@ -310,6 +301,7 @@ domain_criterion = nn.BCEWithLogitsLoss()
 @torch.no_grad()
 def evaluate_accuracy(clip_model, dann, loader):
     """Evaluate accuracy using DANN-adapted features and class classifier"""
+    clip_model.eval()
     dann.eval()
     correct = 0
     total = 0
@@ -320,7 +312,7 @@ def evaluate_accuracy(clip_model, dann, loader):
         
         # Get CLIP features
         clip_feats = clip_model.encode_image(images).float()
-        clip_feats = F.normalize(clip_feats, dim=-1) # added normalization
+        #clip_feats = F.normalize(clip_feats, dim=-1) # added normalization
         # Get adapted features and class logits
         class_logits, _ = dann(clip_feats, lambda_=0.0)
         
@@ -333,56 +325,57 @@ def evaluate_accuracy(clip_model, dann, loader):
     return accuracy
 
 #9. t-sne helper function
-def extract_tsne_features(clip_model, dann, loader, domain_label, max_batches=20):
-    features = []
-    domains = []
+# def extract_tsne_features(clip_model, dann, loader, domain_label, max_batches=20):
+#     features = []
+#     domains = []
 
-    with torch.no_grad():
-        for i, batch in enumerate(loader):
-            if i >= max_batches:
-                break
+#     with torch.no_grad():
+#         for i, batch in enumerate(loader):
+#             if i >= max_batches:
+#                 break
 
-            if isinstance(batch, (list, tuple)):
-                images = batch[0]
-            else:
-                images = batch
+#             if isinstance(batch, (list, tuple)):
+#                 images = batch[0]
+#             else:
+#                 images = batch
 
-            images = images.to(device)
+#             images = images.to(device)
 
-            clip_feats = clip_model.encode_image(images).float()
-            adapted_feats = dann.extract_features(clip_feats)
+#             clip_feats = clip_model.encode_image(images).float()
+#             clip_feats = F.normalize(clip_feats, dim=-1)  # Consistency with evaluation
+#             adapted_feats = dann.extract_features(clip_feats)
 
-            features.append(adapted_feats.cpu().numpy())
-            domains.append(
-                np.full(len(images), domain_label)
-            )
+#             features.append(adapted_feats.cpu().numpy())
+#             domains.append(
+#                 np.full(len(images), domain_label)
+#             )
 
-    return np.vstack(features), np.hstack(domains)
+#     return np.vstack(features), np.hstack(domains)
 #9. t-sne before adaption
 
-print("Extracting features BEFORE adaptation...")
+# print("Extracting features BEFORE adaptation...")
 
-src_feats, src_dom = extract_tsne_features(
-    clip_model, dann, real_train_loader, domain_label=1
-)
-tgt_feats, tgt_dom = extract_tsne_features(
-    clip_model, dann, target_train_loader, domain_label=0
-)
+# src_feats, src_dom = extract_tsne_features(
+#     clip_model, dann, real_train_loader, domain_label=1
+# )
+# tgt_feats, tgt_dom = extract_tsne_features(
+#     clip_model, dann, target_train_loader, domain_label=0
+# )
 
-X = np.vstack([src_feats, tgt_feats])
-y = np.hstack([src_dom, tgt_dom])
+# X = np.vstack([src_feats, tgt_feats])
+# y = np.hstack([src_dom, tgt_dom])
 
-tsne = TSNE(n_components=2, perplexity=30, random_state=42)
-X_2d = tsne.fit_transform(X)
+# tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+# X_2d = tsne.fit_transform(X)
 
-plt.figure(figsize=(6, 6))
-plt.scatter(X_2d[y == 1, 0], X_2d[y == 1, 1], label="Source", alpha=0.6)
-plt.scatter(X_2d[y == 0, 0], X_2d[y == 0, 1], label="Target", alpha=0.6)
-plt.legend()
-plt.title("t-SNE BEFORE Domain Adaptation")
-plt.savefig("tsne_before_adaptation.png", dpi=150, bbox_inches='tight')
-wandb.log({"tsne_before_adaptation": wandb.Image("tsne_before_adaptation.png")})
-plt.show()
+# plt.figure(figsize=(6, 6))
+# plt.scatter(X_2d[y == 1, 0], X_2d[y == 1, 1], label="Source", alpha=0.6)
+# plt.scatter(X_2d[y == 0, 0], X_2d[y == 0, 1], label="Target", alpha=0.6)
+# plt.legend()
+# plt.title("t-SNE BEFORE Domain Adaptation")
+# plt.savefig("tsne_before_adaptation.png", dpi=150, bbox_inches='tight')
+# wandb.log({"tsne_before_adaptation": wandb.Image("tsne_before_adaptation.png")})
+# plt.show()
 
 #10. DANN training loop
 print("Starting DANN training...")
@@ -391,11 +384,19 @@ global_step = 0
 
 for epoch in range(epochs):
     dann.train()
-    
-    for (x_src, y_src), x_tgt in zip(real_train_loader, target_train_loader):
-        x_src = x_src.to(device)
-        y_src = y_src.to(device)
+
+    tgt_iter = cycle(target_train_loader)
+    for (x_src, y_src) in real_train_loader:
+        x_tgt = next(tgt_iter)          # x_tgt is a CPU batch here
+        x_src, y_src = x_src.to(device), y_src.to(device)
         x_tgt = x_tgt.to(device)
+
+
+    
+    # for (x_src, y_src), x_tgt in zip(real_train_loader, target_train_loader):
+    #     x_src = x_src.to(device)
+    #     y_src = y_src.to(device)
+    #     x_tgt = x_tgt.to(device)  unblock this if you ran into a oom issue
 
         lambda_ = dann_lambda(global_step, total_steps)
 
@@ -410,8 +411,11 @@ for epoch in range(epochs):
         # f_tgt = clip_model.encode_image(x_tgt).float()
         if METHOD =="frozen":
             with torch.no_grad():
-                f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
-                f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
+                f_src = clip_model.encode_image(x_src).float() # not adding normalization 
+                f_tgt = clip_model.encode_image(x_tgt).float() # not adding normalization
+                    
+                # f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
+                # f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
         elif METHOD =="unfrozen":
             f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
             f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
@@ -429,12 +433,22 @@ for epoch in range(epochs):
             domain_criterion(dom_logits_src, dom_src_labels) +
             domain_criterion(dom_logits_tgt, dom_tgt_labels)
         )
+        with torch.no_grad(): # calculate domain accuracy for logging
+            dom_preds_src = (torch.sigmoid(dom_logits_src) > 0.5).float()
+            dom_preds_tgt = (torch.sigmoid(dom_logits_tgt) > 0.5).float()
 
-        loss = class_loss + domain_loss
+            dom_acc = (
+                dom_preds_src.eq(dom_src_labels).float().mean() +
+                dom_preds_tgt.eq(dom_tgt_labels).float().mean()
+            ) / 2
+            
+        loss = class_loss + domain_loss  # Weighted for balanced adaptation
+        
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True) # change it when you chaange the cycle loader.
         loss.backward()
         optimizer.step()
+        
 
 
         # Log every 10 steps
@@ -445,6 +459,7 @@ for epoch in range(epochs):
                 "loss": loss.item(),
                 "class_loss": class_loss.item(),
                 "domain_loss": domain_loss.item(),
+                "domain_accuracy": dom_acc.item(),
                 "lambda": lambda_,
 
             })
@@ -454,6 +469,12 @@ for epoch in range(epochs):
     # eval 
     real_val_acc = evaluate_accuracy(clip_model, dann, real_val_loader)
     target_val_acc = evaluate_accuracy(clip_model, dann, target_val_loader)
+    
+    # Restore training mode for next epoch
+    if METHOD=="unfrozen":
+        clip_model.train()
+    dann.train()
+    
     print(f"Epoch {epoch+1}/{epochs} | Loss: {loss.item():.4f} | real_val_acc: {real_val_acc} | target_val_acc: {target_val_acc}")
 
     wandb.log({
@@ -486,20 +507,20 @@ wandb.finish()
 
 
 
-# save model 
-if METHOD == "frozen":
-    model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
-elif METHOD =="unfrozen":
-    model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
+# # save model 
+# if METHOD == "frozen":
+#     model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
+# elif METHOD =="unfrozen":
+#     model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
 
 
 
-torch.save({
-    "clip_visual_state_dict": clip_model.visual.state_dict(),
-    "dann_state_dict": dann.state_dict(),
-    "optimizer_state_dict": optimizer.state_dict(),
-    "epoch": epoch,
-}, model_save_path)
+# torch.save({
+#     "clip_visual_state_dict": clip_model.visual.state_dict(),
+#     "dann_state_dict": dann.state_dict(),
+#     "optimizer_state_dict": optimizer.state_dict(),
+#     "epoch": epoch,
+# }, model_save_path)
 
 
 
