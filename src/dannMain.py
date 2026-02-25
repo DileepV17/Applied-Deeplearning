@@ -17,20 +17,20 @@ import torch.optim as optim
 import itertools
 from itertools import cycle
 
-METHOD = "frozen" # "unfrozen" # "frozen"
+METHOD = "unfrozen" # "unfrozen" # "frozen"
 TEST_ON = "clipart" # "clipart" # sketch # infograph # painting
 SCHEDULER = "cosine" # stepLR # cosine
 epochs = 10
-LR_clip = 1e-6 #5e-7
-LR_dannHead = "defined separately" #2e-4 #5e-4  #1e-3 (reduced for stability)
+LR_clip = 1e-3 #5e-7
+LR_dannHead = 1e-3 #2e-4 #5e-4  #1e-3 (reduced for stability)
 BATCH_SIZE = 64  # Reduced from 256 for more stable gradient updates
 print("using Total loss with alpha weighting and not using normalization of features inside the DANN_head, but using batch norm in the dann_head")
 # NORMALIZE = "no"
 # wandb initialize
 if METHOD=="frozen":
-    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_clip{METHOD}_Dann_adaptedLamda_{LR_clip}clip_{LR_dannHead}dann_{SCHEDULER}")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_unfrozen_Dann_ConstLamda_1e-3clip_1e-3dann_{SCHEDULER}")
 elif METHOD=="unfrozen":
-    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_clip{METHOD}_Dann_adaptedLamda_{LR_clip}clip_{LR_dannHead}dann_{SCHEDULER}")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_unfrozen_Dann_ConstLamda_1e-3clip_1e-3dann_{SCHEDULER}")
 
 # gradient reversal layer
 class GradientReversal(Function):
@@ -277,13 +277,13 @@ if METHOD=="frozen":
     optimizer = torch.optim.Adam([
         {"params": dann.adapter.parameters(), "lr": 1e-2},
         {"params": dann.class_classifier.parameters(), "lr": 1e-2},
-        {"params": dann.domain_classifier.parameters(), "lr": 1e-3},  
+        {"params": dann.domain_classifier.parameters(), "lr": 1e-2},  
         ], weight_decay=1e-5)
         #optimizer = torch.optim.Adam( dann.parameters(), lr=LR_dannHead, weight_decay=1e-5)
 elif METHOD=="unfrozen":
     optimizer = torch.optim.Adam([
-        {"params": clip_model.parameters(), "lr": LR_clip}, # clip backbone # baseline at 1e-6
-        {"params": dann.parameters(), "lr": LR_dannHead} # dann head # baseline at 1e-3
+        {"params": clip_model.parameters(), "lr": 1e-3}, # clip backbone # baseline at 1e-6
+        {"params": dann.parameters(), "lr": 1e-3} # dann head # baseline at 1e-3
     ], weight_decay=1e-5)
 
 
@@ -314,7 +314,7 @@ def evaluate_accuracy(clip_model, dann, loader):
         clip_feats = clip_model.encode_image(images).float()
         #clip_feats = F.normalize(clip_feats, dim=-1) # added normalization
         # Get adapted features and class logits
-        class_logits, _ = dann(clip_feats, lambda_=0.0)
+        class_logits, _ = dann(clip_feats, lambda_=1.0)
         
         # Get predictions
         _, preds = class_logits.max(1)
@@ -398,8 +398,8 @@ for epoch in range(epochs):
     #     y_src = y_src.to(device)
     #     x_tgt = x_tgt.to(device)  unblock this if you ran into a oom issue
 
-        lambda_ = dann_lambda(global_step, total_steps)
-
+        # lambda_ = dann_lambda(global_step, total_steps)
+        lambda_ = 0.5
         ######################
         # # option a: freezing clip 
         # with torch.no_grad():
