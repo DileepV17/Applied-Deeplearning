@@ -14,7 +14,7 @@ import numpy as np
 from collections import Counter
 
 # wandb initialize
-model_name = "10epochs_infograph_clipart_2layers1024_0.001lr_run-StepLR-CE"
+model_name = "10epochs_infograph_clipart_5layers1024_0.001lr_run-StepLR-CE"
 wandb.init(
     project="applied-dl-domain-adaptation",
     name=model_name,
@@ -114,29 +114,29 @@ image_features_dim = model.visual.output_dim
 
 
 # # - 1024 - 2 layers
+# classifier  = nn.Sequential(
+#     nn.Linear(image_features_dim, 1024),
+#     nn.ReLU(inplace=True),
+#     nn.Dropout(0.1), #droupout changed to 0.1       
+#     nn.Linear(1024, num_classes)
+# ).to(device)
+
+# ## 5 layers
 classifier  = nn.Sequential(
     nn.Linear(image_features_dim, 1024),
     nn.ReLU(inplace=True),
     nn.Dropout(0.1), #droupout changed to 0.1       
+    nn.Linear(1024 , 1024),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),  
+    nn.Linear(1024, 1024),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),  
+    nn.Linear(1024, 1024),
+    nn.ReLU(inplace=True),
+    nn.Dropout(0.1),        
     nn.Linear(1024, num_classes)
 ).to(device)
-
-# ## 5 layers
-# classifier  = nn.Sequential(
-#     nn.Linear(image_features_dim, 512),
-#     nn.ReLU(inplace=True),
-#     nn.Dropout(0.1), #droupout changed to 0.1       
-#     nn.Linear(512, 512),
-#     nn.ReLU(inplace=True),
-#     nn.Dropout(0.1),  
-#     nn.Linear(512, 512),
-#     nn.ReLU(inplace=True),
-#     nn.Dropout(0.1),  
-#     nn.Linear(512, 512),
-#     nn.ReLU(inplace=True),
-#     nn.Dropout(0.1),        
-#     nn.Linear(512, num_classes)
-# ).to(device)
 
 
 ##  then we choose 512 vs 1024 vs if any - then experiment with number of layers (1, 3, 5)

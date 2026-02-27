@@ -17,7 +17,7 @@ import torch.optim as optim
 import itertools
 from itertools import cycle
 
-METHOD = "unfrozen" # "unfrozen" # "frozen"
+METHOD = "frozen" # "unfrozen" # "frozen"
 TEST_ON = "clipart" # "clipart" # sketch # infograph # painting
 SCHEDULER = "cosine" # stepLR # cosine
 epochs = 10
@@ -28,9 +28,9 @@ print("using Total loss with alpha weighting and not using normalization of feat
 # NORMALIZE = "no"
 # wandb initialize
 if METHOD=="frozen":
-    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_unfrozen_Dann_ConstLamda_1e-3clip_1e-3dann_{SCHEDULER}")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_frozen_Dann_AdaptiveLamda_1e-2clip_1e-2dann_{SCHEDULER}")
 elif METHOD=="unfrozen":
-    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_unfrozen_Dann_ConstLamda_1e-3clip_1e-3dann_{SCHEDULER}")
+    wandb.init(project="applied-dl-domain-adaptation", name=f"real_{TEST_ON}_unfrozen_Dann_AdaptiveLamda_1e-6clip_1e-3dann_{SCHEDULER}")
 
 # gradient reversal layer
 class GradientReversal(Function):
@@ -54,14 +54,14 @@ class DANNHead(nn.Module): # DANN head with shared adapter, class classifier, an
         # Shared feature adapter (compress input features)
         self.adapter = nn.Sequential(
             nn.Linear(feature_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),  # Added batch norm for stability
+            #nn.BatchNorm1d(hidden_dim),  # Added batch norm for stability
             nn.ReLU(),
             
             nn.Linear(hidden_dim, 256),
-            nn.BatchNorm1d(256),
+            #nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 256),
-            nn.BatchNorm1d(256),
+            #nn.BatchNorm1d(256),
             nn.Dropout(0.1),
             nn.ReLU(),     #adding one more layer
 
@@ -73,10 +73,10 @@ class DANNHead(nn.Module): # DANN head with shared adapter, class classifier, an
 
         # Task-specific class classifier (main task)
         self.class_classifier = nn.Sequential(
-        nn.Linear(256, 256),
-        nn.BatchNorm1d(256),
+        nn.Linear(256, 128),
+        #nn.BatchNorm1d(256),
         nn.ReLU(),
-        nn.Linear(256, num_classes) # adding one more layer here as well, to match the adapter output
+        nn.Linear(128, num_classes) # adding one more layer here as well, to match the adapter output
             # nn.ReLU(),
             # nn.Linear(hidden_dim, num_classes)
         )
@@ -86,7 +86,7 @@ class DANNHead(nn.Module): # DANN head with shared adapter, class classifier, an
         # Domain discriminator (simpler than class classifier per DANN)
         self.domain_classifier = nn.Sequential(
             nn.Linear(256, 256),
-            nn.BatchNorm1d(256),
+            #nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 1)
         )
@@ -117,7 +117,7 @@ class DANNHead(nn.Module): # DANN head with shared adapter, class classifier, an
 # def dann_lambda(step, max_steps):
 #     p = step / max_steps
 #     return 2. / (1. + math.exp(-10 * p)) - 1
-def dann_lambda(step, max_steps, lam_max=0.8):
+def dann_lambda(step, max_steps, lam_max=1.0):
     p = step / max_steps
     return lam_max * (2. / (1. + math.exp(-10 * p)) - 1)
 
@@ -275,16 +275,16 @@ dann = DANNHead(feature_dim, num_classes).to(device)
 #optimizer
 if METHOD=="frozen":
     optimizer = torch.optim.Adam([
-        {"params": dann.adapter.parameters(), "lr": 1e-2},
+        {"params": dann.adapter.parameters(), "lr": 1e-2}, # adapter # baseline at 1e-3
         {"params": dann.class_classifier.parameters(), "lr": 1e-2},
-        {"params": dann.domain_classifier.parameters(), "lr": 1e-2},  
+        {"params": dann.domain_classifier.parameters(), "lr": 1e-3},  
         ], weight_decay=1e-5)
         #optimizer = torch.optim.Adam( dann.parameters(), lr=LR_dannHead, weight_decay=1e-5)
 elif METHOD=="unfrozen":
     optimizer = torch.optim.Adam([
-        {"params": clip_model.parameters(), "lr": 1e-3}, # clip backbone # baseline at 1e-6
+        {"params": clip_model.parameters(), "lr": 1e-6}, # clip backbone # baseline at 1e-6
         {"params": dann.parameters(), "lr": 1e-3} # dann head # baseline at 1e-3
-    ], weight_decay=1e-5)
+    ], weight_decay=1e-4)
 
 
 
@@ -312,7 +312,7 @@ def evaluate_accuracy(clip_model, dann, loader):
         
         # Get CLIP features
         clip_feats = clip_model.encode_image(images).float()
-        #clip_feats = F.normalize(clip_feats, dim=-1) # added normalization
+        clip_feats = F.normalize(clip_feats, dim=-1) # added normalization
         # Get adapted features and class logits
         class_logits, _ = dann(clip_feats, lambda_=1.0)
         
@@ -379,7 +379,8 @@ def evaluate_accuracy(clip_model, dann, loader):
 
 #10. DANN training loop
 print("Starting DANN training...")
-total_steps = epochs * min(len(real_train_loader), len(target_train_loader))
+total_steps = epochs * len(real_train_loader) # changed from min(len(real_train_loader), len(target_train_loader)) to len(real_train_loader) since we are using cycle loader for target domain. So the number of steps is determined by the source domain loader.
+#total_steps = epochs * min(len(real_train_loader), len(target_train_loader))
 global_step = 0
 
 for epoch in range(epochs):
@@ -398,8 +399,8 @@ for epoch in range(epochs):
     #     y_src = y_src.to(device)
     #     x_tgt = x_tgt.to(device)  unblock this if you ran into a oom issue
 
-        # lambda_ = dann_lambda(global_step, total_steps)
-        lambda_ = 0.5
+        lambda_ = dann_lambda(global_step, total_steps)
+        #lambda_ = 0.5
         ######################
         # # option a: freezing clip 
         # with torch.no_grad():
@@ -414,8 +415,8 @@ for epoch in range(epochs):
                 f_src = clip_model.encode_image(x_src).float() # not adding normalization 
                 f_tgt = clip_model.encode_image(x_tgt).float() # not adding normalization
                     
-                # f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
-                # f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
+                f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
+                f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
         elif METHOD =="unfrozen":
             f_src = F.normalize(clip_model.encode_image(x_src).float(), dim=-1) # adding normalization 
             f_tgt = F.normalize(clip_model.encode_image(x_tgt).float(), dim=-1) # adding normalization
@@ -514,13 +515,13 @@ wandb.finish()
 #     model_save_path = f"models/dann/real_{TEST_ON}_clip{METHOD}_Dann_adaptedLambda.pth"
 
 
-
-# torch.save({
-#     "clip_visual_state_dict": clip_model.visual.state_dict(),
-#     "dann_state_dict": dann.state_dict(),
-#     "optimizer_state_dict": optimizer.state_dict(),
-#     "epoch": epoch,
-# }, model_save_path)
+model_save_path = f"models/dann/Dann_adaptedLambda.pth"
+torch.save({
+    "clip_visual_state_dict": clip_model.visual.state_dict(),
+    "dann_state_dict": dann.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    "epoch": epoch,
+}, model_save_path)
 
 
 
