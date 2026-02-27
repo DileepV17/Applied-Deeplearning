@@ -15,8 +15,8 @@ This project evaluates strategies for adapting **CLIP (Contrastive Language-Imag
 ## 📊 Dataset: Domain Net
 We use **Domain Net** (https://ai.bu.edu/M3SDA), a benchmark for multi-source domain adaptation.
 * **Source Domain:** `Real`
-* **Target Domains:** `Clipart`
-* **Modality:** Image-Text (leveraging CLIP text-embeddings from class names).
+* **Target Domains:** `Clipart`, `Painting`, `Sketch`, `Infograph` 
+
 
 ---
 
