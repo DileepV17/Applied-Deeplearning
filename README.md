@@ -20,7 +20,13 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 1. **Linear Probing / MLP Heads:** A 2-layer Multi-Layer Perceptron (MLP) trained exclusively on the source domain.
 2. **Domain-Adversarial Neural Network (DANN):**  We attach a domain classifier network via a **Gradient Reversal Layer (GRL)**. The GRL reverses gradients during backpropagation, forcing the feature extractor to learn representations that are discriminative for the main task but invariant across the source and target domains.
 3. **Multi-Subnetwork Ensemble:** An ensemble of $K=3$ parallel subnetworks. Input images are augmented into two distinct views, passed through the frozen backbone, and processed by the subnetworks. A **Diversity Loss** is applied to penalise low variance among the subnetworks, ensuring mutually exclusive feature learning:
-   
+$$\mathcal{L}_{total} = \mathcal{L}_{CE} + \lambda \cdot \max(0, \alpha - \text{std}(z_k))$$
+
+Where:
+* $\mathcal{L}_{CE}$ is the standard **Cross-Entropy Loss** calculated on the averaged ensemble predictions.
+* $\lambda$ is the **Diversity Weight** (hyperparameter) controlling the strength of the penalty.
+* $\alpha$ is the **Margin** threshold; we stop penalizing the model once the subnetwork disagreement exceeds this value.
+* $\text{std}(z_k)$ is the **Standard Deviation** across the $K$ subnetwork outputs ($z_1, z_2, \dots, z_K$), serving as a proxy for representational diversity.   
 
 
 ---
