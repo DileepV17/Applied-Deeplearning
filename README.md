@@ -30,7 +30,7 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 ![DANN Loss Curves](data_statistics/domainaccuracy.png)
 *Figure 2: Domian Accuracy initially starts high and oscillates around 0.5 indicating domain confusion is working correctly.*
 ![DANN Loss Curves](data_statistics/valaccuracies.png.png)
-*Figure 2: Source(Real_images) and Target(Clipart_images) validation accuracy curves.*
+*Figure 3: Source(Real_images) and Target(Clipart_images) validation accuracy curves.*
 
 ---
 ## 3. Ablation Studies
@@ -92,6 +92,7 @@ Using an ensemble of three parallel 2-layer MLP heads.
 | **Infograph** | 0.001 | 2 | Cosine | **0.33** |
 
 *(Note: We also utilise a Diversity Loss mechanism to force disagreement between the ensemble components, preventing representational collapse) (https://arxiv.org/abs/2308.14705)*
+
 
 $$\mathcal{L}_{total} = \mathcal{L}_{CE} + \lambda \cdot \max(0, \alpha - \text{std}(z_k))$$
 
