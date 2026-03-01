@@ -145,7 +145,7 @@ classifier  = nn.Sequential(
 
 ##  then we choose 512 vs 1024 vs if any - then experiment with number of layers (1, 3, 5)
 
-# Freeze CLIP visual encoder - only train the classifier
+# UnFreeze only the CLIP visual encoder - 
 for param in model.visual.parameters():
     param.requires_grad = True
 
