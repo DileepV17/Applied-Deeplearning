@@ -1,2 +1,9 @@
 torch==2.1.0
 torchvision==0.16.0
+open_clip_torch
+wandb
+tqdm
+Pillow
+scikit-learn
+matplotlib
+numpy
