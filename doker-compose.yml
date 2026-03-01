@@ -4,7 +4,6 @@ services:
   experiment:
     build: .
     image: lmu-domain-adaptation:latest
-    # Pass your Weights & Biases API key from your host machine
     environment:
       - WANDB_API_KEY=${WANDB_API_KEY}
     # Mount the local data folder so the container can read/write without duplicating data
