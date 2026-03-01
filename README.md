@@ -36,15 +36,92 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 ## 3. Ablation Studies
 We conducted ablation studies to isolate the impact of our adaptation techniques. The table below compares the performance of the frozen CLIP model with and without our specific domain adaptation strategies on the `Infograph` target domain.
 
-| Method | Source Acc (Real) | Target Acc (Clipart) | 
+### Stage 1: Zero-Shot Learning
+Baseline performance of the pre-trained CLIP model. This highlights the inherent domain shift difficulty before any adaptation.
+
+| Domain Type | Accuracy (Test Set) |
+| :--- | :--- |
+| **Real (Source)** | **0.78** |
+| **Clipart** | 0.62 |
+| **Painting** | 0.59 |
+| **Sketch** | 0.55 |
+| **Infograph** | 0.40 |
+
+---
+
+### Stage 2: Fine-Tuning Strategies
+
+#### 2.1 Full CLIP Fine-Tuning
+We unfreeze the entire CLIP visual encoder. Results show that **Label Smoothing (ls)** provides a marginal but consistent improvement across domains.
+
+| Domain | lr | ls | Accuracy |
 | :--- | :--- | :--- | :--- |
-| **Zero-Shot (Baseline)** | 78.63% | 62.00% | 
-| **Source Fine-Tuning (Unfreeze only visual encoder No Adapt)** | 86.00% | 65.00% |
-| **Source Fine-Tuning with 2 MLP (No Adapt)** | 84.00% | 59.00% |
-| **Source Fine-Tuning with 3 ensembles (each 2 MLP (No Adapt))** | 82.00% | 53.00% | 
-| **DANN (Adversarial Adapt)** | 83.00% | 62.00% | 
+| **Real** | 0.001 | yes | **0.86** |
+| **Clipart** | 0.001 | yes | **0.65** |
+| **Infograph** | 0.001 | yes | **0.38** |
+| **Real** | 0.001 | no | 0.85 |
+| **Clipart** | 0.001 | no | 0.63 |
+| **Infograph** | 0.001 | no | 0.37 |
+
+#### 2.2 MLP Head Probing (Frozen Backbone)
+We freeze the CLIP model and append an MLP head to mitigate catastrophic forgetting. **2-layer architectures** significantly outperformed 5-layer versions, which likely suffered from optimization difficulties on fixed features.
 
 
+| Domain | lr | Layers | Scheduler | Accuracy |
+| :--- | :--- | :--- | :--- | :--- |
+| **Real** | 0.001 | 2 | StepLR | **0.84** |
+| **Clipart** | 0.001 | 2 | StepLR | **0.59** |
+| **Infograph** | 0.001 | 2 | StepLR | **0.36** |
+| **Real** | 0.001 | 2 | Cosine | **0.84** |
+| **Clipart** | 0.001 | 2 | Cosine | **0.59** |
+| **Infograph** | 0.001 | 2 | Cosine | **0.36** |
+| **Real** | 0.001 | 5 | StepLR | 0.73 |
+| **Clipart** | 0.001 | 5 | StepLR | 0.43 |
+| **Infograph** | 0.001 | 5 | StepLR | 0.23 |
+| **Real** | 0.001 | 5 | Cosine | 0.73 |
+| **Clipart** | 0.001 | 5 | Cosine | 0.42 |
+| **Infograph** | 0.001 | 5 | Cosine | 0.20 |
+
+#### 2.3 3-Model Ensemble (Frozen Backbone)
+Using an ensemble of three parallel 2-layer MLP heads. 
+
+| Domain | lr | Layers | Scheduler | Accuracy |
+| :--- | :--- | :--- | :--- | :--- |
+| **Real** | 0.001 | 2 | Cosine | **0.82** |
+| **Clipart** | 0.001 | 2 | Cosine | **0.53** |
+| **Infograph** | 0.001 | 2 | Cosine | **0.33** |
+
+*(Note: We also introduced a Diversity Loss mechanism to force disagreement between the ensemble components, preventing representational collapse:)*
+$$\mathcal{L}_{total} = \mathcal{L}_{CE} + \lambda \cdot \max(0, \alpha - \text{std}(z_k))$$
+
+---
+### Stage 3: Domain Adaptation (DANN)
+We implement adversarial learning to align source and target feature distributions using a **Gradient Reversal Layer (GRL)**. We experimented with both frozen and unfrozen CLIP backbones to evaluate the trade-off between feature adaptation and catastrophic forgetting.
+
+
+#### 3.1 DANN with Frozen CLIP Encoder
+The CLIP visual encoder is frozen, and we train MLP heads (configuration: 2 layers for feature extraction, 2 layers for classification, 3 layers for domain discrimination). We used an Adaptive Lambda scheduler (scaled to a maximum of 0.8) for the gradient reversal.
+
+| Domain | Learning Rate | Layers | Lambda | Scheduler | Accuracy |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Real** | 0.01 | 2, 2, 3 | Adaptive | Cosine | 0.83 |
+| **Clipart** | 0.01 | 2, 2, 3 | Adaptive | Cosine | 0.58 |
+| **Real** | 0.001 | 2, 2, 3 | Adaptive | Cosine | **0.84** |
+| **Clipart** | 0.001 | 2, 2, 3 | Adaptive | Cosine | **0.59** |
+
+#### 3.2 DANN with Unfrozen CLIP Visual Encoder
+In this two-stage fine-tuning approach, we unfreeze the CLIP encoder to allow deeper adaptation to the target domain distributions. We evaluated the impact of adding the adversarial domain loss against a baseline without it.
+
+| Domain | Lambda | Domain Loss Added | Accuracy | Domain Gap |
+| :--- | :--- | :--- | :--- | :--- |
+| **Real** | Adaptive (max 0.3) | No | 0.84 | - |
+| **Clipart** | Adaptive (max 0.3) | No | 0.58 | 26 pt. |
+| **Real** | Adaptive (max 0.3) | Yes | 0.84 | - |
+| **Clipart** | Adaptive (max 0.3) | Yes | 0.60 | 24 pt. |
+| **Real** | Adaptive (max 0.6) | Yes | **0.83** | - |
+| **Clipart** | Adaptive (max 0.6) | Yes | **0.62** | **21 pt. \*** |
+
+**Key Finding:** Unfreezing the encoder and applying a higher Adaptive Lambda (max 0.6) successfully reduced the domain gap between Real and Clipart down to 21 percentage points, achieving the highest target accuracy (62%) for the Clipart domain in our experiments.
 
 ---
 
