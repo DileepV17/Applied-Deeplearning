@@ -28,9 +28,9 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 ![DANN Loss Curves](data_statistics/totalloss.png)
 *Figure 1: Total loss for the DANN classifier. The adversarial domain loss stabilizes as the feature extractor successfully learns domain-invariant representations.*
 ![DANN Loss Curves](data_statistics/domainaccuracy.png)
-*Figure 2: Domian Accuracy initially starts high and oscillates around 0.5 indicating domain confusion is working correctly.*
+*Figure 2: Domain Accuracy initially starts high and oscillates around 0.5 indicating domain confusion is working correctly.*
 ![DANN Loss Curves](data_statistics/valaccuracies.png)
-*Figure 3: Source(Real_images) and Target(Clipart_images) validation accuracy curves.*
+*Figure 3: Source (**Real** images) and Target (**Clipart** images) validation accuracy curves.*
 
 ---
 ## 3. Ablation Studies
@@ -125,6 +125,30 @@ In this two-stage fine-tuning approach, we unfreeze the CLIP encoder to allow de
 
 **Key Finding:** Unfreezing the encoder and applying a higher Adaptive Lambda (max 0.6) successfully reduced the domain gap between Real and Clipart down to 21 percentage points, achieving the highest target accuracy (62%) for the Clipart domain in our experiments.
 
+#### 3.3 Visualization of Feature Embeddings using t-SNE
+To intuitively understand the impact of our Domain Adaptation (DA) techniques, we use t-SNE to reduce the dimensionality of our feature embeddings and visualize them in a 2D space.  This allows us to observe how the distribution of the source and target domains changes before and after training.
+
+**Before Domain Adaptation (Zero-Shot CLIP)**
+
+![t-SNE Before DA](data_statistics/tsne_before.png)
+
+*Figure 4: t-SNE for feature embeddings before Domain Adaptation. Blue dots represent the source domain (Real) and orange dots represent the target domain (Clipart).*
+
+**Interpretation:** 
+
+Before adaptation, there is a distinct separation between the source and target domain clusters. The frozen CLIP model inherently recognizes the stylistic differences between real images and clipart, creating two separated distributions. This visualises the "domain gap"—because the target features exist in a different area of the latent space, a classifier trained solely on the source domain will perform poorly on the target domain.
+
+
+**After Domain Adaptation (DANN)**
+
+![t-SNE After DA](data_statistics/tsne_dann_adapted_features_feb27.png)
+
+*Figure 5: t-SNE for feature embeddings after Domain Adaptation using an unfrozen encoder.*
+
+**Interpretation:** 
+
+After applying the Domain-Adversarial Neural Network, the blue (Real) and orange (Clipart) points become significantly more mixed and overlapping. This indicates that the Gradient Reversal Layer (GRL) functioned exactly as intended: it penalised the feature extractor for producing domain-specific stylistic features. As a result, the model was forced to learn **domain-invariant representations**, aligning the two distributions so the classifier can evaluate both domains using the same underlying semantic logic.
+
 ---
 
 ## 4. Discussion of Results and Limitations
@@ -146,7 +170,7 @@ Following the mandatory course template:
 ```text
 ├── data_statistics/    # Dataset lists and loaders
 ├── misc/
-├── src/            # Training scripts (DANN, Ensemble, Zero-shot)
+├── src/                # Training scripts (DANN, Ensemble, Zero-shot)
 ├── requirements.txt    # Environment dependencies
 └── README.md
 
