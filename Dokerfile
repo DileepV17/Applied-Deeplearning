@@ -1,0 +1,19 @@
+# 1. Use an official PyTorch image with CUDA support as base
+FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
+
+# 2. Set the working directory inside the container
+WORKDIR /app
+
+# 3. Install necessary system packages 
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# 4. Copy requirements file and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 5. copy the rest of project codebase into the container
+COPY ..
+
+# 6. Set the default command to run then the container starts
+CMD ["python"]
+
