@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  experiment:
+    build: .
+    image: lmu-domain-adaptation:latest
+    # Pass your Weights & Biases API key from your host machine
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}
+    # Mount the local data folder so the container can read/write without duplicating data
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models # Mount models directory to save checkpoints back to your host
+    # Enable GPU support for the container
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
