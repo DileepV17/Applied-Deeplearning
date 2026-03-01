@@ -29,7 +29,7 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 *Figure 1: Total loss for the DANN classifier. The adversarial domain loss stabilizes as the feature extractor successfully learns domain-invariant representations.*
 ![DANN Loss Curves](data_statistics/domainaccuracy.png)
 *Figure 2: Domain Accuracy initially starts high and oscillates around 0.5 indicating domain confusion is working correctly.*
-![DANN Loss Curves](data_statistics/valaccuracies.png)
+![DANN Loss Curves](data_statistics/validation_accuracies.png)
 *Figure 3: Source (**Real** images) and Target (**Clipart** images) validation accuracy curves.*
 
 ---
