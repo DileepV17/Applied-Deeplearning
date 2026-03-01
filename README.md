@@ -144,15 +144,11 @@ In this two-stage fine-tuning approach, we unfreeze the CLIP encoder to allow de
 Following the mandatory course template:
 
 ```text
-├── data/               # Dataset lists and loaders
-├── models/             # DANN, MLP Heads, and Ensemble architectures
-├── notebooks/          # t-SNE visualizations and EDA
-├── scripts/            # Training scripts (DANN, Ensemble, Zero-shot)
-├── utils/              # Helper functions: Gradient Reversal and Metrics logic
-├── configs/            # YAML/JSON configs files
+├── data_statistics/    # Dataset lists and loaders
+├── misc/
+├── src/            # Training scripts (DANN, Ensemble, Zero-shot)
 ├── requirements.txt    # Environment dependencies
-├── README.md
-└── main.py             # Entry point for all experiments
+└── README.md
 
 ```
 ---
