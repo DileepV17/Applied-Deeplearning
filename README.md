@@ -26,26 +26,25 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 
 ### DANN Adaptation Curves
 ![DANN Loss Curves](data_statistics/totalloss.png)
-*Figure 1: Training and validation loss for the DANN classifier. The adversarial domain loss stabilizes as the feature extractor successfully learns domain-invariant representations.*
-
-### Ensemble Diversity Curves
-![Ensemble Accuracy](docs/ensemble_accuracy_curves.png)
-*Figure 2: Validation accuracy on the Target (Infograph) domain over 10 epochs. The model with Diversity Loss (blue) shows better generalization and stability compared to the standard ensemble (red).*
+*Figure 1: Total loss for the DANN classifier. The adversarial domain loss stabilizes as the feature extractor successfully learns domain-invariant representations.*
+![DANN Loss Curves](data_statistics/domainaccuracy.png)
+*Figure 2: Domian Accuracy initially starts high and oscillates around 0.5 indicating domain confusion is working correctly.*
+![DANN Loss Curves](data_statistics/valaccuracies.png.png)
+*Figure 2: Source(Real_images) and Target(Clipart_images) validation accuracy curves.*
 
 ---
-
 ## 3. Ablation Studies
 We conducted ablation studies to isolate the impact of our adaptation techniques. The table below compares the performance of the frozen CLIP model with and without our specific domain adaptation strategies on the `Infograph` target domain.
 
-| Method | Source Acc (Real) | Target Acc (Infograph) | Target F1-Score |
+| Method | Source Acc (Real) | Target Acc (Clipart) | 
 | :--- | :--- | :--- | :--- |
-| **Zero-Shot (Baseline)** | 78.63% | 40.46% | *[TODO]* |
-| **Source Fine-Tuning (No Adapt)** | *[TODO]*% | *[TODO]*% | *[TODO]* |
-| **Ensemble (w/o Diversity Loss)** | *[TODO]*% | *[TODO]*% | *[TODO]* |
-| **Ensemble (w/ Diversity Loss)** | *[TODO]*% | *[TODO]*% | *[TODO]* |
-| **DANN (Adversarial Adapt)** | *[TODO]*% | *[TODO]*% | *[TODO]* |
+| **Zero-Shot (Baseline)** | 78.63% | 62.00% | 
+| **Source Fine-Tuning (Unfreeze only visual encoder No Adapt)** | 86.00% | 65.00% |
+| **Source Fine-Tuning with 2 MLP (No Adapt)** | 84.00% | 59.00% |
+| **Source Fine-Tuning with 3 ensembles (each 2 MLP (No Adapt))** | 82.00% | 53.00% | 
+| **DANN (Adversarial Adapt)** | 83.00% | 62.00% | 
 
-**Key Finding:** DANN and the Diversity Ensemble both significantly outperform the zero-shot and standard fine-tuning baselines on the target dataset, demonstrating successful mitigation of the domain gap.
+
 
 ---
 
@@ -53,7 +52,7 @@ We conducted ablation studies to isolate the impact of our adaptation techniques
 
 ### Results Analysis
 * **Feature Alignment:** t-SNE visualizations  confirm that DANN effectively clusters target domain features closer to the source domain features compared to the zero-shot baseline.
-* **Diversity Loss:** Forcing disagreement among the $K=3$ subnetworks proved highly effective at preventing representational collapse, yielding a more robust classifier that is less sensitive to domain-specific quirks.
+
 
 ### Limitations & Future Work
 1. **Catastrophic Forgetting:** Early experiments with an unfrozen CLIP encoder resulted in severe degradation of pre-trained knowledge. While freezing the backbone solved this, it limited the theoretical maximum adaptation capacity of the model.
