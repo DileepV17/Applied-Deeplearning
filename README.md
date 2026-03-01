@@ -18,8 +18,8 @@ This project evaluates strategies for adapting **CLIP (Contrastive Language-Imag
 Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundation.  To prevent catastrophic forgetting, the visual encoder is frozen during adaptation. We explored three primary architectural extensions:
 
 1. **Linear Probing / MLP Heads:** A 2-layer Multi-Layer Perceptron (MLP) trained exclusively on the source domain.
-2. **Domain-Adversarial Neural Network (DANN):**  We attach a domain classifier network via a **Gradient Reversal Layer (GRL)**. The GRL reverses gradients during backpropagation, forcing the feature extractor to learn representations that are discriminative for the main task but invariant across the source and target domains.
-3. **Multi-Subnetwork Ensemble:** An ensemble of $K=3$ parallel subnetworks. Input images are augmented into two distinct views, passed through the frozen backbone, and processed by the subnetworks. 
+2. **Domain-Adversarial Neural Network (DANN):**  We attach a domain classifier network via a **Gradient Reversal Layer (GRL)**. The GRL reverses gradients during backpropagation, forcing the feature extractor to learn representations that are discriminative for the main task but invariant across the source and target domains. (https://arxiv.org/abs/1505.07818)
+3. **Multi-Subnetwork Ensemble:** An ensemble of $K=3$ parallel subnetworks. Input images are augmented into two distinct views, passed through the frozen backbone, and processed by the subnetworks. (https://arxiv.org/abs/2308.14705)
 ---
 
 ## 2. Training and Validation Curves
@@ -91,7 +91,8 @@ Using an ensemble of three parallel 2-layer MLP heads.
 | **Clipart** | 0.001 | 2 | Cosine | **0.53** |
 | **Infograph** | 0.001 | 2 | Cosine | **0.33** |
 
-*(Note: We also introduced a Diversity Loss mechanism to force disagreement between the ensemble components, preventing representational collapse:)*
+*(Note: We also utilise a Diversity Loss mechanism to force disagreement between the ensemble components, preventing representational collapse) (https://arxiv.org/abs/2308.14705)*
+
 $$\mathcal{L}_{total} = \mathcal{L}_{CE} + \lambda \cdot \max(0, \alpha - \text{std}(z_k))$$
 
 ---
