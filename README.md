@@ -25,7 +25,7 @@ Our project relies on the pre-trained **CLIP (ViT-B/32)** model as the foundatio
 ## 2. Training and Validation Curves
 
 ### DANN Adaptation Curves
-![DANN Loss Curves](docs/dann_loss_curves.png)
+![DANN Loss Curves](data_statistics/W&B Chart 3_1_2026, 3_43_58 PM.png)
 *Figure 1: Training and validation loss for the DANN classifier. The adversarial domain loss stabilizes as the feature extractor successfully learns domain-invariant representations.*
 
 ### Ensemble Diversity Curves
