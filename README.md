@@ -12,6 +12,8 @@
 ## Demo link 
 Deployed **DANN Adapted Model** (https://clip-frontend-970144669286.europe-west3.run.app)
 
+---
+
 ## 📌 Project Overview
 This project evaluates strategies for adapting **CLIP (Contrastive Language-Image Pre-training)** to diverse visual domains. We explore the "domain gap" between real-world imagery and specialized distributions like infographics, clipart, and sketches using the **DomainNet** (https://ai.bu.edu/M3SDA) benchmark.
 
