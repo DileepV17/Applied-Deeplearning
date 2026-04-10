@@ -15,7 +15,7 @@ What is missing (should do):
 
 
 Other things to do next (possibly):
-(1) Try other models (CLIP, BLIP
+(1) Try other models (CLIP, BLIP)
 (2) Try multiple foundation models on one / two datasets (one direction) (eg, ResNET)
 (3) Try multiple benchmarked datasets on one model (second direction)
 
