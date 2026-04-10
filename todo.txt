@@ -1,0 +1,21 @@
+What we have so far:
+- Zero-shot, fine-tuning, and DANN for DomainNet dataset (wrt/ Real, Infograph, Clipart)
+- Result: 
+(1) Zero-Shot performs quite well (0.78 = Real, 0.63 = Clipart)
+(2) Fine-tuning gives performance gains in the Source domain set (real), but marginal (Clipart) for the target domain over zero shot (0.86 = Real, 0.65 = Clipart)
+(3) For DANN, our performance for the source dataset (Real) improves over zero shot, and stays approx the same for the target (clipart) as compared to zero shot (0.83 = Real, 0.62 = Clipart)
+(4) For DANN, the changes in hyperparameters surprisingly dont help much! 
+(4) Conclusion: Fine-tuning performs the best (for both source and target) 
+
+
+What is missing (should do):
+(1) generate captions for the Domain net dataset using a LLM
+(2) Use these generated captions for training
+
+
+
+Other things to do next (possibly):
+(1) Try other models (CLIP, BLIP
+(2) Try multiple foundation models on one / two datasets (one direction) (eg, ResNET)
+(3) Try multiple benchmarked datasets on one model (second direction)
+
