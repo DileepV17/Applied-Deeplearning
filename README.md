@@ -11,7 +11,7 @@
 
 ## Demo link 
 Deployed **DANN Adapted Model** (https://clip-frontend-970144669286.europe-west3.run.app)
-[]
+
 **For now server is down. we are working to fix it.**
 ---
 
